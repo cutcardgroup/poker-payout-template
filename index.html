@@ -196,7 +196,7 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
 
   <div style="margin-top:10px;">
     <label class="expand-tog">
-      <input type="checkbox" id="f-expand" onchange="go()">
+      <input type="checkbox" id="f-expand" onchange="ROWS.length?(render(),renderFB(),updateStatus()):null">
       <span>Expand grouped places to individual rows (e.g. show 11th, 12th, 13th separately)</span>
     </label>
   </div>
@@ -359,6 +359,8 @@ function scaleUnlocked(rows,pool){
 // Grand totals using SNAP rounding
 function grandTotal(){ return ROWS.reduce((s,r)=>s+snapRound(r.prize,SNAP)*r.count,0); }
 function grandPct(){   return ROWS.reduce((s,r)=>s+(r.prize/POOL)*100*r.count,0); }
+// When rounding is active use rounded prizes for % — reflects what actually gets paid
+function displayPct(){ return SNAP ? ROWS.reduce((s,r)=>s+(snapRound(r.prize,SNAP)/POOL)*100*r.count,0) : grandPct(); }
 
 // ─────────────────────────────────────────────────────────
 // UI
@@ -430,6 +432,21 @@ function go(){
 }
 
 // ─────────────────────────────────────────────────────────
+// LOCK BADGE — tooltip explains why a row is locked
+// ─────────────────────────────────────────────────────────
+function lockBadge(rowIdx, r){
+  let tip;
+  if(rowIdx===0 && GFIRST>0 && r.prize>=GFIRST-0.01){
+    tip=`Guaranteed 1st place minimum of ${fmt(GFIRST)}`;
+  } else if(MINCASH>0 && r.prize<=MINCASH+0.01){
+    tip=`Min cash floor — prize locked at ${fmt(MINCASH)}`;
+  } else {
+    tip='Manually locked';
+  }
+  return ` <span title="${tip}" style="cursor:help;font-size:.8em;">🔒</span>`;
+}
+
+// ─────────────────────────────────────────────────────────
 // RENDER TABLE
 // ─────────────────────────────────────────────────────────
 function render(){
@@ -437,7 +454,7 @@ function render(){
   const displayRows=expand ? expandRows(ROWS) : ROWS;
 
   const tot=grandTotal();
-  const totp=grandPct();
+  const totp=displayPct();
   const pOk=Math.abs(totp-100)<0.5;
   const exactPool=ROWS.reduce((s,r)=>s+r.prize*r.count,0);
   const roundedTotal=ROWS.reduce((s,r)=>s+snapRound(r.prize,SNAP)*r.count,0);
@@ -452,12 +469,19 @@ function render(){
   </tr></thead><tbody>`;
 
   displayRows.forEach((r,i)=>{
-    // For expanded rows, map back to ROWS index for editing
-    const editIdx=expand
-      ? ROWS.findIndex((row,ri)=>{
-          let p=0; for(let x=0;x<ri;x++) p+=ROWS[x].count; return i>=p && i<p+ROWS[ri].count;
-        })
-      : i;
+    // Map display row index back to ROWS bracket index + position within bracket
+    let editIdx=i, withinIdx=0;
+    if(expand){
+      let pos=0;
+      for(let ri=0;ri<ROWS.length;ri++){
+        if(i<pos+ROWS[ri].count){ editIdx=ri; withinIdx=i-pos; break; }
+        pos+=ROWS[ri].count;
+      }
+    }
+    // When a bracket has multiple places in expanded view, use the splitting editors
+    const needSplit=expand&&ROWS[editIdx].count>1;
+    const onchgPct  =needSplit?`editPctAt(${editIdx},${withinIdx},this.value)`  :`editPct(${editIdx},this.value)`;
+    const onchgPrize=needSplit?`editPrizeAt(${editIdx},${withinIdx},this.value)`:`editPrize(${editIdx},this.value)`;
 
     const rawPrize=r.prize;
     const dispPrize=snapRound(rawPrize,SNAP);
@@ -466,9 +490,9 @@ function render(){
       ?'<span style="background:var(--red);color:#fff;font-size:.55rem;padding:1px 4px;border-radius:3px;margin-left:3px;">LOW</span>':'';
 
     h+=`<tr>
-      <td class="pos">${r.label}${r.locked?' 🔒':''}</td>
-      <td class="r"><input class="w75" type="number" step="0.001" value="${pEach}" onchange="editPct(${editIdx},this.value)"></td>
-      <td class="r"><input class="w100" type="number" step="1" value="${dispPrize.toFixed(SNAP?0:2)}" onchange="editPrize(${editIdx},this.value)">${low}</td>
+      <td class="pos">${r.label}${r.locked?lockBadge(editIdx,r):''}</td>
+      <td class="r"><input class="w75" type="number" step="0.001" value="${pEach}" onchange="${onchgPct}"></td>
+      <td class="r"><input class="w100" type="number" step="1" value="${dispPrize.toFixed(SNAP?0:2)}" onchange="${onchgPrize}">${low}</td>
       <td class="r rt">${fmt(dispPrize*r.count)}${r.count>1?`<br><span style="font-size:.65rem;color:var(--dim);">×${r.count}</span>`:''}</td>
     </tr>`;
   });
@@ -500,13 +524,46 @@ function editPrize(i,v){
   render(); renderFB(); updateStatus();
 }
 
+// Edit a specific place within a grouped bracket (expanded view).
+// Splits the bracket into up to 3 slices: before / edited / after.
+function editPrizeAt(bracketIdx,withinIdx,val){
+  const p=parseFloat(val); if(isNaN(p)||p<0)return;
+  const b=ROWS[bracketIdx];
+  if(b.count===1){ b.prize=p; b.locked=false; }
+  else {
+    // 1-indexed position of the first place in this bracket
+    let startPos=1;
+    for(let x=0;x<bracketIdx;x++) startPos+=ROWS[x].count;
+    const split=[];
+    // Slice before the edited place
+    if(withinIdx>0){
+      const s=startPos, e=startPos+withinIdx-1;
+      split.push({label:withinIdx===1?ordinal(s):`${ordinal(s)}-${ordinal(e)}`,count:withinIdx,prize:b.prize,locked:b.locked});
+    }
+    // The individually edited place
+    split.push({label:ordinal(startPos+withinIdx),count:1,prize:p,locked:false});
+    // Slice after the edited place
+    const afterCount=b.count-withinIdx-1;
+    if(afterCount>0){
+      const s=startPos+withinIdx+1, e=startPos+b.count-1;
+      split.push({label:afterCount===1?ordinal(s):`${ordinal(s)}-${ordinal(e)}`,count:afterCount,prize:b.prize,locked:b.locked});
+    }
+    ROWS.splice(bracketIdx,1,...split);
+  }
+  render(); renderFB(); updateStatus();
+}
+function editPctAt(bracketIdx,withinIdx,val){
+  const p=parseFloat(val); if(isNaN(p)||p<0)return;
+  editPrizeAt(bracketIdx,withinIdx,(p/100)*POOL);
+}
+
 // ─────────────────────────────────────────────────────────
 // STATUS BAR
 // ─────────────────────────────────────────────────────────
 function updateStatus(){
   $('status-bar').style.display='block';
   const places=ROWS.reduce((s,r)=>s+r.count,0);
-  const totp=grandPct();
+  const totp=displayPct();
   const tot=grandTotal();
   const pOk=Math.abs(totp-100)<0.5;
   const mOk=Math.abs(tot-POOL)<1;

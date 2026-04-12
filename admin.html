@@ -22,10 +22,7 @@ body{background:#0a0a0a;color:#e8ead8;font-family:system-ui,sans-serif;height:10
   color:#e8ead8;font-family:monospace;font-size:.9rem;padding:7px 10px;width:200px;
 }
 .club-wrap input:focus{outline:none;border-color:#2daf52;}
-.btn{
-  font-size:.78rem;padding:7px 14px;border-radius:5px;border:none;cursor:pointer;
-  font-weight:600;letter-spacing:.5px;
-}
+.btn{font-size:.78rem;padding:7px 14px;border-radius:5px;border:none;cursor:pointer;font-weight:600;letter-spacing:.5px;}
 .btn-green{background:#1a6b3a;color:#fff;}
 .btn-green:hover{background:#22883f;}
 .btn-ghost{background:transparent;color:#8a9b80;border:1px solid #2a4030;}
@@ -33,37 +30,87 @@ body{background:#0a0a0a;color:#e8ead8;font-family:system-ui,sans-serif;height:10
 
 /* theme chips */
 .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
-.chip{
-  font-size:.7rem;padding:4px 10px;border-radius:20px;cursor:pointer;border:1px solid #2a4030;
-  background:#0d1810;color:#8a9b80;transition:all .15s;
-}
+.chip{font-size:.7rem;padding:4px 10px;border-radius:20px;cursor:pointer;border:1px solid #2a4030;background:#0d1810;color:#8a9b80;transition:all .15s;}
 .chip:hover,.chip.active{background:#1a6b3a;border-color:#2daf52;color:#fff;}
 
 /* ── INFO BAR ── */
-.info-bar{
-  background:#0d1810;border-bottom:1px solid #2a4030;
-  padding:6px 16px;font-size:.7rem;color:#8a9b80;display:flex;gap:16px;flex-shrink:0;
-}
+.info-bar{background:#0d1810;border-bottom:1px solid #2a4030;padding:6px 16px;font-size:.7rem;color:#8a9b80;display:flex;gap:16px;flex-shrink:0;}
 .info-bar span{color:#e8c86a;font-family:monospace;}
 
-/* ── PREVIEW ── */
-.preview-wrap{flex:1;overflow:hidden;position:relative;}
-iframe{
-  width:100%;height:100%;border:none;display:block;
-  background:#0a0a0a;
-}
+/* ── MAIN SPLIT ── */
+.main{flex:1;display:flex;overflow:hidden;}
+
+/* ── LEFT — IFRAME PREVIEW ── */
+.preview-wrap{flex:1;overflow:hidden;position:relative;min-width:0;}
+iframe{width:100%;height:100%;border:none;display:block;background:#0a0a0a;}
 .empty-state{
   position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
   color:#2a4030;font-size:1rem;gap:8px;pointer-events:none;
 }
 .empty-state .suits{font-size:3rem;opacity:.3;}
 
-/* ── KNOWN CLUBS ── */
-.known{
-  background:#111a14;border-top:1px solid #2a4030;
-  padding:8px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap;
+/* ── RIGHT — PAYOUT TABLE PANEL ── */
+.pt-panel{
+  width:340px;flex-shrink:0;background:#0d1810;border-left:1px solid #2a4030;
+  display:flex;flex-direction:column;overflow:hidden;
 }
+.pt-header{
+  padding:10px 14px;background:#111a14;border-bottom:1px solid #2a4030;flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.pt-header h2{font-size:.78rem;text-transform:uppercase;letter-spacing:2px;color:#c8a84b;}
+.pt-header .pt-club{font-size:.7rem;color:#8a9b80;font-family:monospace;}
+.pt-body{flex:1;overflow-y:auto;padding:10px;}
+
+/* bracket card */
+.bracket{margin-bottom:10px;border:1px solid #1a2e22;border-radius:7px;overflow:hidden;}
+.bracket-hdr{
+  background:#142010;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;
+  cursor:pointer;user-select:none;
+}
+.bracket-hdr:hover{background:#1a2e1a;}
+.bracket-range{font-family:monospace;font-size:.78rem;color:#e8c86a;font-weight:600;}
+.bracket-places{font-size:.65rem;color:#8a9b80;}
+.bracket-chevron{font-size:.65rem;color:#8a9b80;transition:transform .15s;}
+.bracket.open .bracket-chevron{transform:rotate(180deg);}
+
+.bracket-rows{display:none;}
+.bracket.open .bracket-rows{display:block;}
+
+table.pt-tbl{width:100%;border-collapse:collapse;}
+table.pt-tbl td{padding:4px 10px;font-size:.74rem;border-bottom:1px solid rgba(42,64,48,.3);}
+table.pt-tbl tr:last-child td{border-bottom:none;}
+table.pt-tbl .place{color:#c8a84b;font-family:monospace;font-weight:600;}
+table.pt-tbl .pct{color:#e8ead8;text-align:right;font-family:monospace;}
+table.pt-tbl .count{color:#8a9b80;text-align:right;font-size:.68rem;}
+
+/* total pct chip */
+.pct-chip{
+  display:inline-block;font-size:.62rem;font-family:monospace;padding:1px 6px;border-radius:3px;
+  background:rgba(45,175,82,.15);color:#2daf52;border:1px solid rgba(45,175,82,.3);margin-left:6px;
+}
+.pct-chip.bad{background:rgba(192,57,43,.15);color:#c0392b;border-color:rgba(192,57,43,.3);}
+
+/* default table notice */
+.default-notice{
+  text-align:center;padding:24px 16px;color:#3a5040;font-size:.78rem;line-height:1.8;
+}
+.default-notice .icon{font-size:1.8rem;margin-bottom:6px;}
+
+/* colour swatches */
+.swatches{display:flex;gap:4px;flex-wrap:wrap;padding:10px 14px 4px;border-bottom:1px solid #1a2e22;}
+.swatch{width:20px;height:20px;border-radius:3px;border:1px solid rgba(255,255,255,.1);flex-shrink:0;}
+.swatch-wrap{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.swatch-lbl{font-size:.5rem;color:#4a6050;text-align:center;max-width:24px;overflow:hidden;white-space:nowrap;}
+
+/* ── KNOWN CLUBS ── */
+.known{background:#111a14;border-top:1px solid #2a4030;padding:8px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap;}
 .known-label{font-size:.62rem;text-transform:uppercase;letter-spacing:1px;color:#8a9b80;}
+
+/* scrollbar */
+.pt-body::-webkit-scrollbar{width:4px;}
+.pt-body::-webkit-scrollbar-track{background:#0a0a0a;}
+.pt-body::-webkit-scrollbar-thumb{background:#2a4030;border-radius:2px;}
 </style>
 </head>
 <body>
@@ -90,13 +137,33 @@ iframe{
   <div>Status: <span id="info-status">—</span></div>
 </div>
 
-<div class="preview-wrap">
-  <div class="empty-state" id="empty-state">
-    <div class="suits">♠♥♦♣</div>
-    <div>Enter a club name above and click Preview</div>
-    <div style="font-size:.75rem;margin-top:4px;">Requires a local server — run: <code style="background:#1a1a1a;padding:2px 6px;border-radius:3px;">npx serve .</code></div>
+<div class="main">
+
+  <!-- LEFT: iframe preview -->
+  <div class="preview-wrap">
+    <div class="empty-state" id="empty-state">
+      <div class="suits">♠♥♦♣</div>
+      <div>Enter a club name above and click Preview</div>
+      <div style="font-size:.75rem;margin-top:4px;">Requires a local server — run: <code style="background:#1a1a1a;padding:2px 6px;border-radius:3px;">npx serve .</code></div>
+    </div>
+    <iframe id="preview-frame" src="about:blank" title="Theme preview"></iframe>
   </div>
-  <iframe id="preview-frame" src="about:blank" title="Theme preview"></iframe>
+
+  <!-- RIGHT: payout table panel -->
+  <div class="pt-panel">
+    <div class="pt-header">
+      <h2>♦ Payout Table</h2>
+      <span class="pt-club" id="pt-club">—</span>
+    </div>
+    <div id="pt-swatches"></div>
+    <div class="pt-body" id="pt-body">
+      <div class="default-notice">
+        <div class="icon">♦</div>
+        Select a club to see its payout table
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <div class="known">
@@ -105,61 +172,135 @@ iframe{
 </div>
 
 <script>
-// Known themes — update this list as you add themes/
-const KNOWN_THEMES = ['default', 'spt', 'matchroom'];
-
-let activeClub = null;
+const KNOWN_THEMES = ['default', 'spt', 'matchroom', 'barmera'];
 
 function buildChips() {
-  const chips = document.getElementById('chips');
-  const known = document.getElementById('known-chips');
-  KNOWN_THEMES.forEach(name => {
-    [chips, known].forEach(container => {
+  ['chips','known-chips'].forEach(id => {
+    const container = document.getElementById(id);
+    KNOWN_THEMES.forEach(name => {
       const el = document.createElement('button');
       el.className = 'chip';
       el.textContent = name;
-      el.onclick = () => selectChip(name, el);
+      el.onclick = () => selectChip(name);
       container.appendChild(el);
     });
   });
 }
 
-function selectChip(name, el) {
-  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-  document.querySelectorAll(`.chip`).forEach(c => {
-    if(c.textContent === name) c.classList.add('active');
-  });
+function selectChip(name) {
+  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.textContent === name));
   document.getElementById('club-input').value = name;
   loadPreview();
 }
 
-function loadPreview() {
+async function loadPreview() {
   const club = document.getElementById('club-input').value.trim();
   if (!club) return;
 
-  activeClub = club;
   const previewUrl = `index.html?club=${encodeURIComponent(club)}`;
-  const themeFile = `themes/${club}.json`;
+  const themeFile  = `themes/${club}.json`;
 
-  document.getElementById('info-url').textContent = previewUrl;
+  document.getElementById('info-url').textContent  = previewUrl;
   document.getElementById('info-file').textContent = themeFile;
   document.getElementById('info-status').textContent = 'Loading…';
   document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('preview-frame').src = previewUrl;
+  document.getElementById('pt-club').textContent = club;
 
-  // Probe the theme file so we can report status
-  fetch(themeFile)
-    .then(r => {
-      if (r.ok) {
-        document.getElementById('info-status').textContent = '✓ Theme found';
+  try {
+    const res = await fetch(themeFile);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const theme = await res.json();
+    document.getElementById('info-status').textContent = '✓ Theme found';
+    renderPayoutPanel(theme, club);
+  } catch(e) {
+    document.getElementById('info-status').textContent =
+      e.message.startsWith('HTTP') ? `⚠ ${e.message} — falling back to default` : '✗ Fetch failed — need a local server (npx serve .)';
+    renderPayoutPanel(null, club);
+  }
+}
+
+function renderPayoutPanel(theme, club) {
+  const body     = document.getElementById('pt-body');
+  const swatches = document.getElementById('pt-swatches');
+
+  // ── Colour swatches ──────────────────────────────────────
+  if (theme && theme.colors && Object.keys(theme.colors).length) {
+    const html = Object.entries(theme.colors).map(([k,v]) => `
+      <div class="swatch-wrap" title="${k}: ${v}">
+        <div class="swatch" style="background:${v}"></div>
+        <div class="swatch-lbl">${k}</div>
+      </div>`).join('');
+    swatches.innerHTML = `<div class="swatches">${html}</div>`;
+  } else {
+    swatches.innerHTML = '';
+  }
+
+  // ── Payout table ─────────────────────────────────────────
+  if (!theme) {
+    body.innerHTML = `<div class="default-notice"><div class="icon">⚠</div>Could not load theme — showing default table</div>`;
+    return;
+  }
+
+  if (!theme.payoutTable) {
+    body.innerHTML = `<div class="default-notice">
+      <div class="icon">♠</div>
+      <strong style="color:#e8ead8;">${theme.name || club}</strong> uses the<br>built-in default payout table.<br>
+      <span style="font-size:.7rem;margin-top:6px;display:block;">Add a <code style="background:#111;padding:1px 4px;border-radius:2px;">payoutTable</code> key to the theme JSON to override.</span>
+    </div>`;
+    return;
+  }
+
+  const brackets = theme.payoutTable;
+  let html = '';
+
+  brackets.forEach((b, bi) => {
+    const places = b.rows.reduce((s, r) => s + r[2], 0);
+    const totalPct = b.rows.reduce((s, r) => s + r[1] * r[2], 0);
+    const pctOk = Math.abs(totalPct - 100) < 0.1;
+    const pctChip = `<span class="pct-chip${pctOk?'':' bad'}">${totalPct.toFixed(2)}%</span>`;
+
+    const rangeLabel = b.max >= 9999
+      ? `${b.min}+ players`
+      : `${b.min}–${b.max} players`;
+
+    // Expand rows with count > 1 for display
+    let rowHtml = '';
+    let pos = 0;
+    b.rows.forEach(r => {
+      const [label, pct, count] = r;
+      if (count === 1) {
+        pos++;
+        rowHtml += `<tr><td class="place">${label}</td><td class="pct">${pct}%</td><td class="count"></td></tr>`;
       } else {
-        document.getElementById('info-status').textContent = `⚠ ${r.status} — will fall back to default`;
+        rowHtml += `<tr><td class="place">${label}</td><td class="pct">${pct}% each</td><td class="count">×${count}</td></tr>`;
+        pos += count;
       }
-    })
-    .catch(() => {
-      document.getElementById('info-status').textContent = '✗ Fetch failed — need a local server (npx serve .)';
     });
 
-  document.getElementById('preview-frame').src = previewUrl;
+    html += `
+      <div class="bracket open" id="bracket-${bi}">
+        <div class="bracket-hdr" onclick="toggleBracket(${bi})">
+          <div>
+            <span class="bracket-range">${rangeLabel}</span>
+            ${pctChip}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="bracket-places">${places} place${places!==1?'s':''}</span>
+            <span class="bracket-chevron">▲</span>
+          </div>
+        </div>
+        <div class="bracket-rows">
+          <table class="pt-tbl"><tbody>${rowHtml}</tbody></table>
+        </div>
+      </div>`;
+  });
+
+  body.innerHTML = html;
+}
+
+function toggleBracket(bi) {
+  document.getElementById(`bracket-${bi}`).classList.toggle('open');
 }
 
 function openNew() {
@@ -167,7 +308,6 @@ function openNew() {
   window.open(`index.html?club=${encodeURIComponent(club)}`, '_blank');
 }
 
-// Enter key in input
 document.addEventListener('DOMContentLoaded', () => {
   buildChips();
   document.getElementById('club-input').addEventListener('keydown', e => {
