@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poker Payout Calculator</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Code+Pro:wght@400;600&family=Inter:wght@300;400;500;600&display=swap');
+
+:root {
+  --green:#1a6b3a; --green2:#22883f; --green3:#2daf52;
+  --felt:#0d4a27; --gold:#c8a84b; --gold2:#e8c86a;
+  --dark:#0a0a0a; --card:#111a14; --card2:#0d1810;
+  --text:#e8ead8; --dim:#8a9b80; --red:#c0392b; --amber:#d68910;
+  --border:#2a4030;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:var(--dark);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;
+  background-image:radial-gradient(ellipse at 20% 20%,rgba(26,107,58,.15) 0%,transparent 50%),
+                   radial-gradient(ellipse at 80% 80%,rgba(200,168,75,.08) 0%,transparent 50%);
+}
+
+/* ── HEADER ── */
+header{
+  background:linear-gradient(135deg,var(--felt),#081f10);
+  border-bottom:2px solid var(--gold);
+  padding:14px 20px;display:flex;align-items:center;gap:12px;
+}
+header .suit{font-size:1.6rem;color:var(--gold);}
+header h1{font-family:'Bebas Neue',cursive;font-size:1.5rem;letter-spacing:3px;color:var(--gold2);}
+header p{font-size:.7rem;color:var(--dim);margin-top:1px;}
+#hdr-logo{height:44px;max-width:180px;object-fit:contain;display:none;}
+
+/* ── LAYOUT ── */
+.wrap{max-width:860px;margin:0 auto;padding:16px 12px;}
+
+/* ── CARD ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:16px;}
+.card-title{font-family:'Bebas Neue',cursive;letter-spacing:2px;font-size:1rem;color:var(--gold);border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:14px;}
+
+/* ── SECTION LABEL ── */
+.slbl{font-size:.62rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--dim);margin:12px 0 6px;}
+.slbl:first-child{margin-top:0;}
+
+/* ── GRID ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;}
+@media(max-width:480px){
+  .g3{grid-template-columns:1fr 1fr;}
+  .g4{grid-template-columns:1fr 1fr;}
+}
+
+/* ── FIELDS ── */
+label.lbl{display:block;font-size:.64rem;text-transform:uppercase;letter-spacing:1.3px;color:var(--dim);margin-bottom:4px;}
+input[type=number],select{
+  width:100%;background:var(--card2);border:1px solid var(--border);border-radius:6px;
+  color:var(--text);font-family:'Source Code Pro',monospace;font-size:.9rem;padding:9px 10px;
+  transition:border-color .2s;-webkit-appearance:none;appearance:none;
+}
+input[type=number]:focus,select:focus{outline:none;border-color:var(--green3);}
+
+/* rounding toggles */
+.rtog-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;}
+.rtog{
+  background:var(--card2);border:1px solid var(--border);border-radius:5px;
+  color:var(--dim);font-family:'Bebas Neue',cursive;letter-spacing:1px;font-size:.9rem;
+  padding:6px 10px;cursor:pointer;transition:all .15s;
+}
+.rtog.active{background:var(--green);border-color:var(--green3);color:#fff;}
+
+/* expand toggle */
+.expand-tog{
+  display:inline-flex;align-items:center;gap:8px;cursor:pointer;
+  font-size:.78rem;color:var(--dim);margin-top:8px;user-select:none;
+}
+.expand-tog input{width:auto;padding:0;}
+.expand-tog span{transition:color .15s;}
+.expand-tog:hover span{color:var(--text);}
+
+/* ── BUTTONS ── */
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;}
+.btn{font-family:'Bebas Neue',cursive;letter-spacing:2px;font-size:1rem;padding:10px 20px;border-radius:6px;border:none;cursor:pointer;transition:all .18s;}
+.btn-green{background:linear-gradient(135deg,var(--green),var(--green2));color:#fff;border:1px solid var(--green3);}
+.btn-green:hover{background:linear-gradient(135deg,var(--green2),var(--green3));}
+.btn-ghost{background:transparent;color:var(--dim);border:1px solid var(--border);}
+.btn-ghost:hover{border-color:var(--dim);color:var(--text);}
+.btn-gold{background:linear-gradient(135deg,#a07830,var(--gold));color:#1a0f00;border:1px solid var(--gold2);}
+.btn-gold:hover{background:linear-gradient(135deg,var(--gold),var(--gold2));}
+
+/* ── STATUS BAR ── */
+#status-bar{display:none;}
+.sbar{display:flex;flex-wrap:wrap;gap:16px;}
+.stat{display:flex;flex-direction:column;}
+.slb{font-size:.58rem;text-transform:uppercase;letter-spacing:1.3px;color:var(--dim);}
+.sv{font-family:'Source Code Pro',monospace;font-size:.95rem;font-weight:600;color:var(--gold2);}
+.ok{color:var(--green3)!important;} .bad{color:var(--red)!important;} .warn{color:var(--amber)!important;}
+
+/* ── TABLE WRAPPER ── */
+.tbl-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;}
+.tbl-hdr{background:var(--felt);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);}
+.tbl-hdr h2{font-family:'Bebas Neue',cursive;letter-spacing:2px;font-size:.95rem;color:var(--gold);}
+.tbl-hint{font-size:.65rem;color:var(--dim);}
+#tbl-inner{overflow-x:auto;}
+
+/* ── TABLE ── */
+table{width:100%;border-collapse:collapse;}
+thead th{background:var(--card2);padding:8px 10px;font-size:.6rem;text-transform:uppercase;letter-spacing:1.2px;color:var(--dim);text-align:left;white-space:nowrap;}
+th.r,td.r{text-align:right;}
+tbody tr{border-bottom:1px solid rgba(42,64,48,.4);transition:background .12s;}
+tbody tr:hover{background:rgba(26,107,58,.1);}
+td{padding:6px 10px;font-size:.84rem;}
+td.pos{font-family:'Bebas Neue',cursive;font-size:.9rem;letter-spacing:1px;color:var(--gold);white-space:nowrap;}
+td input{background:var(--card2);border:1px solid var(--green);border-radius:4px;color:var(--text);font-family:'Source Code Pro',monospace;font-size:.82rem;padding:3px 5px;text-align:right;}
+td input:focus{outline:none;border-color:var(--gold);}
+.w75{width:75px;} .w100{width:100px;}
+td.rt{color:var(--gold2);font-family:'Source Code Pro',monospace;font-size:.8rem;white-space:nowrap;}
+tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:600;border-top:2px solid var(--border);background:var(--card2);}
+
+/* rounding diff note */
+.rdiff{font-size:.7rem;color:var(--amber);font-family:'Source Code Pro',monospace;padding:6px 10px;background:rgba(214,137,16,.08);border-top:1px solid rgba(214,137,16,.2);}
+
+/* ── FACEBOOK ── */
+#fb-out{background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:14px;font-family:'Source Code Pro',monospace;font-size:.78rem;line-height:1.8;color:var(--text);white-space:pre-wrap;min-height:80px;margin-bottom:12px;}
+.toast{display:none;background:var(--green);color:#fff;padding:6px 12px;border-radius:5px;font-size:.75rem;font-weight:600;margin-left:8px;}
+
+/* empty state */
+#empty{text-align:center;padding:40px 16px;color:var(--dim);}
+#empty .suits{font-size:2.5rem;opacity:.2;}
+#empty p{margin-top:8px;font-size:.85rem;}
+</style>
+</head>
+<body>
+
+<header>
+  <img id="hdr-logo" src="" alt="">
+  <span class="suit" id="hdr-suit">♠</span>
+  <div>
+    <h1 id="hdr-title">Payout Calculator</h1>
+    <p id="hdr-sub">Min-cash · guaranteed first · exponential curve · rounding</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- ── SETUP ── -->
+<div class="card">
+  <div class="card-title">♣ Setup</div>
+
+  <div class="slbl">Core</div>
+  <div class="g3">
+    <div><label class="lbl">Total Entries</label><input type="number" id="f-entries" placeholder="e.g. 227" min="1"></div>
+    <div><label class="lbl">Prize Pool ($)</label><input type="number" id="f-pool" placeholder="e.g. 65725" min="1"></div>
+    <div><label class="lbl">Min Cash ($)</label><input type="number" id="f-mincash" placeholder="e.g. 700" min="0"></div>
+  </div>
+
+  <div class="slbl">Options</div>
+  <div class="g4">
+    <div>
+      <label class="lbl">Override Places Paid</label>
+      <input type="number" id="f-places" placeholder="auto" min="1">
+    </div>
+    <div>
+      <label class="lbl">Payout Curve</label>
+      <select id="f-curve">
+        <option value="table">Standard Table</option>
+        <option value="gentle">Exponential — Gentle</option>
+        <option value="medium">Exponential — Medium</option>
+        <option value="steep">Exponential — Steep</option>
+      </select>
+    </div>
+    <div>
+      <label class="lbl">Guaranteed 1st</label>
+      <select id="f-gtype" onchange="toggleG()">
+        <option value="none">None</option>
+        <option value="dollar">Dollar Amount ($)</option>
+        <option value="pct">% of Pool</option>
+      </select>
+    </div>
+    <div id="g-field" style="display:none;">
+      <label class="lbl" id="g-lbl">Amount ($)</label>
+      <input type="number" id="f-gval" placeholder="e.g. 17500" min="0" step="any">
+    </div>
+  </div>
+
+  <div class="slbl">Rounding</div>
+  <div class="rtog-row" id="rtog-row">
+    <button class="rtog active" data-v="0" onclick="setRound(0,this)">No rounding</button>
+    <button class="rtog" data-v="1"  onclick="setRound(1,this)">$1</button>
+    <button class="rtog" data-v="5"  onclick="setRound(5,this)">$5</button>
+    <button class="rtog" data-v="10" onclick="setRound(10,this)">$10</button>
+    <button class="rtog" data-v="25" onclick="setRound(25,this)">$25</button>
+    <button class="rtog" data-v="50" onclick="setRound(50,this)">$50</button>
+  </div>
+
+  <div style="margin-top:10px;">
+    <label class="expand-tog">
+      <input type="checkbox" id="f-expand" onchange="go()">
+      <span>Expand grouped places to individual rows (e.g. show 11th, 12th, 13th separately)</span>
+    </label>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-green" onclick="go()">▶ Calculate Payouts</button>
+    <button class="btn btn-ghost" onclick="go()">↺ Reset</button>
+  </div>
+</div>
+
+<!-- ── STATUS BAR ── -->
+<div class="card" id="status-bar">
+  <div class="sbar">
+    <div class="stat"><span class="slb">Places Paid</span><span class="sv" id="s-places">—</span></div>
+    <div class="stat"><span class="slb">% of Field</span><span class="sv" id="s-field">—</span></div>
+    <div class="stat"><span class="slb">Total % Alloc</span><span class="sv" id="s-pct">—</span></div>
+    <div class="stat"><span class="slb">Total Prizes</span><span class="sv" id="s-prize">—</span></div>
+    <div class="stat"><span class="slb">Min Cash</span><span class="sv" id="s-min">—</span></div>
+    <div class="stat" id="s-g-wrap" style="display:none;"><span class="slb">1st Guaranteed</span><span class="sv" id="s-g">—</span></div>
+    <div class="stat"><span class="slb">Mode</span><span class="sv" id="s-mode" style="font-size:.75rem;">—</span></div>
+    <div class="stat" id="s-round-wrap" style="display:none;"><span class="slb">Rounding Drift</span><span class="sv" id="s-round">—</span></div>
+  </div>
+</div>
+
+<!-- ── PAYOUT TABLE ── -->
+<div class="tbl-wrap">
+  <div class="tbl-hdr">
+    <h2>♦ Payout Table</h2>
+    <span class="tbl-hint">Edit % or $ — other auto-updates</span>
+  </div>
+  <div id="tbl-inner">
+    <div id="empty"><div class="suits">♠♥♦♣</div><p>Enter entries &amp; prize pool, then click Calculate</p></div>
+  </div>
+</div>
+
+<!-- ── FACEBOOK ── -->
+<div class="card">
+  <div class="card-title" style="color:#4a8ff0;">f &nbsp;Facebook Copy</div>
+  <p style="font-size:.74rem;color:var(--dim);margin-bottom:10px;">Ready-to-paste payout announcement.</p>
+  <div id="fb-out">Calculate payouts above to generate text.</div>
+  <div class="btn-row" style="align-items:center;">
+    <button class="btn btn-gold" onclick="copyFB()">📋 Copy to Clipboard</button>
+    <span class="toast" id="toast">Copied!</span>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+
+<script>
+// ─────────────────────────────────────────────────────────
+// PAYOUT TABLE  (pct = per-place %)
+// ─────────────────────────────────────────────────────────
+let PT=[
+ [1,9,       [["1st",80,1],["2nd",20,1]]],
+ [10,30,     [["1st",50,1],["2nd",30,1],["3rd",20,1]]],
+ [31,50,     [["1st",40,1],["2nd",24,1],["3rd",16,1],["4th",12,1],["5th",8,1]]],
+ [51,70,     [["1st",31,1],["2nd",19,1],["3rd",12.5,1],["4th",10.5,1],["5th",8.3,1],["6th",7.3,1],["7th",6.2,1],["8th",5.2,1]]],
+ [71,100,    [["1st",30,1],["2nd",20,1],["3rd",12,1],["4th",9.25,1],["5th",7.5,1],["6th",6.25,1],["7th",5.25,1],["8th",4.25,1],["9th",3.25,1],["10th",2.25,1]]],
+ [101,150,   [["1st",28,1],["2nd",17,1],["3rd",11,1],["4th",8.6,1],["5th",7.3,1],["6th",5.2,1],["7th",4.3,1],["8th",3.3,1],["9th",2.7,1],["10th",2.1,1],["11th-15th",2.1,5]]],
+ [151,200,   [["1st",27.5,1],["2nd",17.5,1],["3rd",11.5,1],["4th",8.5,1],["5th",7.25,1],["6th",5.75,1],["7th",4.5,1],["8th",3,1],["9th",2,1],["10th",1.5,1],["11th-15th",1.2,5],["16th-20th",1,5]]],
+ [201,300,   [["1st",27,1],["2nd",16.5,1],["3rd",11,1],["4th",8,1],["5th",7,1],["6th",5.5,1],["7th",4.5,1],["8th",3,1],["9th",1.75,1],["10th",1.25,1],["11th-15th",0.95,5],["16th-20th",0.75,5],["21st-30th",0.60,10]]],
+ [301,400,   [["1st",25,1],["2nd",16,1],["3rd",10.5,1],["4th",8,1],["5th",7,1],["6th",5.5,1],["7th",4.5,1],["8th",3,1],["9th",1.75,1],["10th",1.25,1],["11th-15th",0.95,5],["16th-20th",0.75,5],["21st-30th",0.5,10],["31st-40th",0.4,10]]],
+ [401,500,   [["1st",25,1],["2nd",15,1],["3rd",10,1],["4th",7.5,1],["5th",6.5,1],["6th",5.5,1],["7th",4.5,1],["8th",3,1],["9th",1.75,1],["10th",1.25,1],["11th-15th",0.95,5],["16th-20th",0.75,5],["21st-30th",0.5,10],["31st-40th",0.35,10],["41st-50th",0.3,10]]],
+ [501,600,   [["1st",25,1],["2nd",15,1],["3rd",9.5,1],["4th",7,1],["5th",6,1],["6th",5,1],["7th",4,1],["8th",3,1],["9th",1.75,1],["10th",1.25,1],["11th-15th",0.95,5],["16th-20th",0.75,5],["21st-30th",0.5,10],["31st-40th",0.35,10],["41st-50th",0.3,10],["51st-60th",0.25,10]]],
+ [601,800,   [["1st",25,1],["2nd",14.5,1],["3rd",9.25,1],["4th",6.75,1],["5th",5.75,1],["6th",4.75,1],["7th",3.75,1],["8th",3,1],["9th",1.75,1],["10th",1.25,1],["11th-15th",0.95,5],["16th-20th",0.75,5],["21st-30th",0.5,10],["31st-40th",0.35,10],["41st-50th",0.3,10],["51st-60th",0.25,10],["61st-70th",0.2,10]]],
+ [801,1000,  [["1st",25,1],["2nd",14,1],["3rd",9,1],["4th",6.5,1],["5th",5.5,1],["6th",4.5,1],["7th",3.5,1],["8th",2.75,1],["9th",1.5,1],["10th",1,1],["11th-15th",0.9,5],["16th-20th",0.7,5],["21st-30th",0.5,10],["31st-40th",0.35,10],["41st-50th",0.3,10],["51st-60th",0.25,10],["61st-70th",0.2,10],["71st-90th",0.15,20]]],
+ [1001,9999, [["1st",25,1],["2nd",14,1],["3rd",9,1],["4th",6.5,1],["5th",5.25,1],["6th",4.25,1],["7th",3.25,1],["8th",2.25,1],["9th",1.5,1],["10th",1,1],["11th-15th",0.85,5],["16th-20th",0.65,5],["21st-30th",0.4,10],["31st-40th",0.35,10],["41st-50th",0.3,10],["51st-60th",0.25,10],["61st-70th",0.2,10],["71st-90th",0.15,20],["91st-110th",0.125,20]]],
+];
+
+// ─────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────
+let ROWS=[], POOL=0, MINCASH=0, ENTRIES=0, GFIRST=0, CURVE='table', SNAP=0;
+let THEME={};
+
+// ─────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────
+const $=id=>document.getElementById(id);
+const fmt=n=>'$'+n.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+function ordinal(n){
+  const s=['th','st','nd','rd'], v=n%100;
+  return n+(s[(v-20)%10]||s[v]||s[0]);
+}
+
+function snapRound(n,to){
+  if(!to) return n; // no rounding — keep exact
+  return Math.round(n/to)*to;
+}
+
+function getStruct(n){
+  for(const[lo,hi,rows]of PT)
+    if(n>=lo&&n<=hi) return rows.map(r=>({label:r[0],pct:r[1],count:r[2]}));
+  return PT[PT.length-1][2].map(r=>({label:r[0],pct:r[1],count:r[2]}));
+}
+
+// Override number of paid places AND fix labels on trimmed bands
+function applyOverride(rows, target){
+  const cur=rows.reduce((s,r)=>s+r.count,0);
+  if(target===cur) return rows;
+  if(target<cur){
+    const res=[]; let used=0;
+    for(const r of rows){
+      if(used>=target) break;
+      const take=Math.min(r.count, target-used);
+      let label=r.label;
+      if(take<r.count){
+        // Band is trimmed — recalculate label from actual positions
+        const start=used+1, end=used+take;
+        label=start===end ? ordinal(start) : `${ordinal(start)}-${ordinal(end)}`;
+      }
+      res.push({...r,label,count:take});
+      used+=take;
+    }
+    return res;
+  }
+  // Extend
+  const extra=target-cur, last=rows[rows.length-1];
+  const start=cur+1, end=target;
+  const newLabel=start===end ? ordinal(start) : `${ordinal(start)}-${ordinal(end)}`;
+  return [...rows,{label:newLabel,pct:last.pct,count:extra}];
+}
+
+// Expand grouped bands into individual placing rows
+function expandRows(rows){
+  const out=[]; let pos=0;
+  for(const r of rows){
+    if(r.count===1){ pos++; out.push({...r}); }
+    else {
+      for(let j=0;j<r.count;j++){
+        pos++;
+        out.push({label:ordinal(pos),count:1,prize:r.prize,locked:r.locked});
+      }
+    }
+  }
+  return out;
+}
+
+function buildExp(rows,pool,k){
+  const total=rows.reduce((s,r)=>s+r.count,0);
+  let pos=0, tmp=[];
+  for(const r of rows){
+    let wsum=0;
+    for(let j=0;j<r.count;j++) wsum+=Math.exp(-k*(pos+j)/total);
+    tmp.push({label:r.label,count:r.count,w:wsum/r.count});
+    pos+=r.count;
+  }
+  const tw=tmp.reduce((s,r)=>s+r.w*r.count,0);
+  return tmp.map(r=>({label:r.label,count:r.count,prize:r.w/tw*pool,locked:false}));
+}
+
+function scaleUnlocked(rows,pool){
+  const lk=rows.filter(r=>r.locked).reduce((s,r)=>s+r.prize*r.count,0);
+  const rem=pool-lk;
+  const ft=rows.filter(r=>!r.locked).reduce((s,r)=>s+r.prize*r.count,0);
+  if(ft>0&&rem>0){const sc=rem/ft; rows.forEach(r=>{if(!r.locked)r.prize*=sc;});}
+}
+
+// Grand totals using SNAP rounding
+function grandTotal(){ return ROWS.reduce((s,r)=>s+snapRound(r.prize,SNAP)*r.count,0); }
+function grandPct(){   return ROWS.reduce((s,r)=>s+(r.prize/POOL)*100*r.count,0); }
+
+// ─────────────────────────────────────────────────────────
+// UI
+// ─────────────────────────────────────────────────────────
+function toggleG(){
+  const t=$('f-gtype').value;
+  $('g-field').style.display=t==='none'?'none':'block';
+  $('g-lbl').textContent=t==='dollar'?'Amount ($)':'Percentage (%)';
+  $('f-gval').placeholder=t==='dollar'?'e.g. 17500':'e.g. 30';
+}
+
+function setRound(v,el){
+  SNAP=v;
+  document.querySelectorAll('.rtog').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  if(ROWS.length) render(), renderFB(), updateStatus();
+}
+
+// ─────────────────────────────────────────────────────────
+// CALCULATE
+// ─────────────────────────────────────────────────────────
+function go(){
+  const entries=parseInt($('f-entries').value);
+  const pool=parseFloat($('f-pool').value);
+  const mc=parseFloat($('f-mincash').value)||0;
+  if(!entries||entries<1||!pool||pool<1){alert('Please enter valid Entries and Prize Pool.');return;}
+
+  const curve=$('f-curve').value;
+  const gtype=$('f-gtype').value;
+  const gval=parseFloat($('f-gval').value)||0;
+  const op=parseInt($('f-places').value)||0;
+
+  let gfirst=0;
+  if(gtype==='dollar'&&gval>0) gfirst=gval;
+  if(gtype==='pct'&&gval>0) gfirst=(gval/100)*pool;
+
+  POOL=pool; MINCASH=mc; ENTRIES=entries; GFIRST=gfirst; CURVE=curve;
+
+  let struct=getStruct(entries);
+  if(op>0) struct=applyOverride(struct,op);
+
+  const kMap={gentle:1.2,medium:2.0,steep:3.5};
+  let rows;
+  if(curve==='table'){
+    rows=struct.map(r=>({label:r.label,count:r.count,prize:(r.pct/100)*pool,locked:false}));
+  } else {
+    rows=buildExp(struct,pool,kMap[curve]);
+  }
+
+  // Pass 1: lock bottom rows at min cash
+  if(mc>0){
+    for(let i=rows.length-1;i>=0;i--){
+      if(rows[i].prize<mc){rows[i].prize=mc;rows[i].locked=true;}
+      else break;
+    }
+  }
+
+  // Pass 2: scale unlocked to fill pool
+  scaleUnlocked(rows,pool);
+
+  // Pass 3: guarantee first (checked AFTER scaling)
+  if(gfirst>0&&rows[0].prize<gfirst){
+    rows[0].prize=gfirst; rows[0].locked=true;
+    scaleUnlocked(rows,pool);
+  }
+
+  ROWS=rows;
+  render(); renderFB(); updateStatus();
+}
+
+// ─────────────────────────────────────────────────────────
+// RENDER TABLE
+// ─────────────────────────────────────────────────────────
+function render(){
+  const expand=$('f-expand').checked;
+  const displayRows=expand ? expandRows(ROWS) : ROWS;
+
+  const tot=grandTotal();
+  const totp=grandPct();
+  const pOk=Math.abs(totp-100)<0.5;
+  const exactPool=ROWS.reduce((s,r)=>s+r.prize*r.count,0);
+  const roundedTotal=ROWS.reduce((s,r)=>s+snapRound(r.prize,SNAP)*r.count,0);
+  const drift=roundedTotal-POOL;
+  const driftOk=Math.abs(drift)<0.01;
+
+  let h=`<table><thead><tr>
+    <th>Position</th>
+    <th class="r">% each</th>
+    <th class="r">Prize each</th>
+    <th class="r">Row total</th>
+  </tr></thead><tbody>`;
+
+  displayRows.forEach((r,i)=>{
+    // For expanded rows, map back to ROWS index for editing
+    const editIdx=expand
+      ? ROWS.findIndex((row,ri)=>{
+          let p=0; for(let x=0;x<ri;x++) p+=ROWS[x].count; return i>=p && i<p+ROWS[ri].count;
+        })
+      : i;
+
+    const rawPrize=r.prize;
+    const dispPrize=snapRound(rawPrize,SNAP);
+    const pEach=(rawPrize/POOL*100).toFixed(3);
+    const low=(MINCASH>0&&rawPrize<MINCASH-0.01)
+      ?'<span style="background:var(--red);color:#fff;font-size:.55rem;padding:1px 4px;border-radius:3px;margin-left:3px;">LOW</span>':'';
+
+    h+=`<tr>
+      <td class="pos">${r.label}${r.locked?' 🔒':''}</td>
+      <td class="r"><input class="w75" type="number" step="0.001" value="${pEach}" onchange="editPct(${editIdx},this.value)"></td>
+      <td class="r"><input class="w100" type="number" step="1" value="${dispPrize.toFixed(SNAP?0:2)}" onchange="editPrize(${editIdx},this.value)">${low}</td>
+      <td class="r rt">${fmt(dispPrize*r.count)}${r.count>1?`<br><span style="font-size:.65rem;color:var(--dim);">×${r.count}</span>`:''}</td>
+    </tr>`;
+  });
+
+  const mOk=Math.abs(tot-POOL)<1;
+  h+=`</tbody><tfoot><tr>
+    <td style="color:var(--dim);font-size:.75rem;">TOTALS</td>
+    <td class="r" style="color:${pOk?'var(--green3)':'var(--red)'};">${totp.toFixed(2)}%</td>
+    <td class="r" style="font-size:.72rem;color:${pOk?'var(--green3)':'var(--red)'};">${pOk?'✓ 100%':'⚠ ≠ 100%'}</td>
+    <td class="r" style="color:${mOk?'var(--green3)':'var(--amber)'};">${fmt(tot)}</td>
+  </tr></tfoot></table>`;
+
+  if(SNAP&&!driftOk){
+    const sign=drift>0?'+':'';
+    h+=`<div class="rdiff">⚠ Rounding drift: ${sign}${fmt(drift)} vs pool of ${fmt(POOL)} — adjust manually if needed</div>`;
+  }
+
+  $('tbl-inner').innerHTML=h;
+}
+
+function editPct(i,v){
+  const p=parseFloat(v); if(isNaN(p)||p<0)return;
+  ROWS[i].prize=(p/100)*POOL; ROWS[i].locked=false;
+  render(); renderFB(); updateStatus();
+}
+function editPrize(i,v){
+  const p=parseFloat(v); if(isNaN(p)||p<0)return;
+  ROWS[i].prize=p; ROWS[i].locked=false;
+  render(); renderFB(); updateStatus();
+}
+
+// ─────────────────────────────────────────────────────────
+// STATUS BAR
+// ─────────────────────────────────────────────────────────
+function updateStatus(){
+  $('status-bar').style.display='block';
+  const places=ROWS.reduce((s,r)=>s+r.count,0);
+  const totp=grandPct();
+  const tot=grandTotal();
+  const pOk=Math.abs(totp-100)<0.5;
+  const mOk=Math.abs(tot-POOL)<1;
+
+  $('s-places').textContent=places;
+  $('s-field').textContent=ENTRIES>0?(places/ENTRIES*100).toFixed(1)+'%':'—';
+  $('s-pct').textContent=totp.toFixed(2)+'%';
+  $('s-pct').className='sv '+(pOk?'ok':'bad');
+  $('s-prize').textContent=fmt(tot);
+  $('s-prize').className='sv '+(mOk?'ok':'warn');
+
+  const last=ROWS[ROWS.length-1];
+  if(!MINCASH){$('s-min').textContent='Not set';$('s-min').className='sv';}
+  else{
+    const ok=last.prize>=MINCASH-0.01;
+    $('s-min').textContent=(ok?'✓ ':'⚠ ')+fmt(snapRound(last.prize,SNAP));
+    $('s-min').className='sv '+(ok?'ok':'bad');
+  }
+
+  if(GFIRST>0){
+    $('s-g-wrap').style.display='flex';
+    const ok=ROWS[0].prize>=GFIRST-0.01;
+    $('s-g').textContent=(ok?'✓ ':'⚠ ')+fmt(snapRound(ROWS[0].prize,SNAP));
+    $('s-g').className='sv '+(ok?'ok':'bad');
+  } else {
+    $('s-g-wrap').style.display='none';
+  }
+
+  const mn={table:'Standard',gentle:'Exp Gentle',medium:'Exp Medium',steep:'Exp Steep'};
+  $('s-mode').textContent=mn[CURVE]||'Standard';
+
+  if(SNAP){
+    const drift=ROWS.reduce((s,r)=>s+snapRound(r.prize,SNAP)*r.count,0)-POOL;
+    $('s-round-wrap').style.display='flex';
+    const sign=drift>=0?'+':'';
+    $('s-round').textContent=sign+fmt(drift);
+    $('s-round').className='sv '+(Math.abs(drift)<0.01?'ok':'warn');
+  } else {
+    $('s-round-wrap').style.display='none';
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// FACEBOOK
+// ─────────────────────────────────────────────────────────
+function renderFB(){
+  const expand=$('f-expand').checked;
+  const displayRows=expand ? expandRows(ROWS) : ROWS;
+  const mn={table:'Standard Table',gentle:'Exponential (Gentle)',medium:'Exponential (Medium)',steep:'Exponential (Steep)'};
+  const fbHeader=THEME.fbHeader||'🃏 TOURNAMENT PAYOUT STRUCTURE 🃏';
+  const fbFooter=THEME.fbFooter||'Good luck at the tables! 🎰';
+  const lines=[
+    fbHeader,
+    `Entries: ${ENTRIES}  |  Prize Pool: ${fmt(POOL)}`,
+    `Structure: ${mn[CURVE]||'Standard'}`,
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+  ];
+  displayRows.forEach(r=>lines.push(`${r.label.padEnd(16)}${fmt(snapRound(r.prize,SNAP))}`));
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  lines.push(fbFooter);
+  $('fb-out').textContent=lines.join('\n');
+}
+
+function copyFB(){
+  navigator.clipboard.writeText($('fb-out').textContent).then(()=>{
+    $('toast').style.display='inline-block';
+    setTimeout(()=>{$('toast').style.display='none';},2000);
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+// THEME SYSTEM
+// ─────────────────────────────────────────────────────────
+async function loadTheme(){
+  const params=new URLSearchParams(window.location.search);
+  const club=params.get('club')||'default';
+  let theme;
+  try{
+    const res=await fetch(`themes/${club}.json`);
+    if(!res.ok) throw new Error('not found');
+    theme=await res.json();
+  }catch(_){
+    if(club!=='default'){
+      try{
+        const res2=await fetch('themes/default.json');
+        if(res2.ok) theme=await res2.json();
+      }catch(_){ /* use CSS defaults */ }
+    }
+  }
+  if(theme) applyTheme(theme);
+}
+
+function applyTheme(theme){
+  THEME=theme;
+  const root=document.documentElement;
+
+  // Colors: each key maps directly to --key CSS variable
+  Object.entries(theme.colors||{}).forEach(([k,v])=>{
+    root.style.setProperty(`--${k}`,v);
+  });
+
+  // Logo
+  if(theme.logo){
+    const img=$('hdr-logo');
+    img.src=theme.logo;
+    img.alt=theme.name||'';
+    img.style.display='block';
+    $('hdr-suit').style.display='none';
+  }
+
+  // Operator name
+  if(theme.name){
+    $('hdr-title').textContent=theme.name;
+    document.title=theme.name+' — Payout Calculator';
+  }
+
+  // Custom payout table: [{min, max, rows:[[label,pct,count],...]}]
+  if(Array.isArray(theme.payoutTable)){
+    PT=theme.payoutTable.map(b=>[b.min,b.max,b.rows]);
+  }
+}
+
+document.addEventListener('DOMContentLoaded',loadTheme);
+</script>
+</body>
+</html>

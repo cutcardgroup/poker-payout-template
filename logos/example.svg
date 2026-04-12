@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="44" viewBox="0 0 180 44">
+  <rect width="180" height="44" rx="6" fill="#0d4a27"/>
+  <text x="90" y="16" text-anchor="middle" font-family="Georgia,serif" font-size="10" fill="#c8a84b" letter-spacing="2">YOUR LOGO HERE</text>
+  <text x="90" y="34" text-anchor="middle" font-family="Georgia,serif" font-size="12" fill="#e8c86a" letter-spacing="2">replace logos/example.svg</text>
+</svg>

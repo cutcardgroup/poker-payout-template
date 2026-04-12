@@ -1,0 +1,14 @@
+{
+  "name": "poker-payout",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Poker tournament payout calculator — Cloudflare Pages deployment",
+  "scripts": {
+    "dev":    "npx serve . -p 3000",
+    "test":   "node scripts/test-payouts.js",
+    "deploy": "npx wrangler pages deploy . --project-name=poker-payout"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "Payout Calculator",
+  "logo": "",
+  "fbHeader": "🃏 TOURNAMENT PAYOUT STRUCTURE 🃏",
+  "fbFooter": "Good luck at the tables! 🎰",
+  "colors": {
+    "green":  "#1a6b3a",
+    "green2": "#22883f",
+    "green3": "#2daf52",
+    "felt":   "#0d4a27",
+    "gold":   "#c8a84b",
+    "gold2":  "#e8c86a",
+    "dark":   "#0a0a0a",
+    "card":   "#111a14",
+    "card2":  "#0d1810",
+    "text":   "#e8ead8",
+    "dim":    "#8a9b80",
+    "border": "#2a4030"
+  }
+}
