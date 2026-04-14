@@ -249,22 +249,8 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
 // ─────────────────────────────────────────────────────────
 // PAYOUT TABLE  (pct = per-place %)
 // ─────────────────────────────────────────────────────────
-let PT=[
- [1,9,       [["1st",80,1],["2nd",20,1]]],
- [10,30,     [["1st",50,1],["2nd",30,1],["3rd",20,1]]],
- [31,50,     [["1st",40,1],["2nd",24,1],["3rd",16,1],["4th",12,1],["5th",8,1]]],
- [51,70,     [["1st",31,1],["2nd",19,1],["3rd",12.5,1],["4th",10.5,1],["5th",8.3,1],["6th",7.3,1],["7th",6.2,1],["8th",5.2,1]]],
- [71,100,    [["1st",30,1],["2nd",20,1],["3rd",12,1],["4th",9.25,1],["5th",7.5,1],["6th",6.25,1],["7th",5.25,1],["8th",4.25,1],["9th",3.25,1],["10th",2.25,1]]],
- [101,150,   [["1st",28,1],["2nd",17,1],["3rd",11,1],["4th",8.6,1],["5th",7.3,1],["6th",5.2,1],["7th",4.3,1],["8th",3.3,1],["9th",2.7,1],["10th",2.1,1],["11th-15th",2.1,5]]],
- [151,200,   [["1st",27.5,1],["2nd",17.5,1],["3rd",11.5,1],["4th",8.5,1],["5th",7.25,1],["6th",5.75,1],["7th",4.5,1],["8th",3,1],["9th",2,1],["10th",1.5,1],["11th-15th",1.2,5],["16th-20th",1,5]]],
- [201,300,   [["1st",27,1],["2nd",16.5,1],["3rd",11,1],["4th",8,1],["5th",7,1],["6th",5.5,1],["7th",4.5,1],["8th",3,1],["9th",1.75,1],["10th",1.25,1],["11th-15th",0.95,5],["16th-20th",0.75,5],["21st-30th",0.60,10]]],
- [301,400,   [["1st",25,1],["2nd",16,1],["3rd",10.5,1],["4th",8,1],["5th",7,1],["6th",5.5,1],["7th",4.5,1],["8th",3,1],["9th",1.75,1],["10th",1.25,1],["11th-15th",0.95,5],["16th-20th",0.75,5],["21st-30th",0.5,10],["31st-40th",0.4,10]]],
- [401,500,   [["1st",25,1],["2nd",15,1],["3rd",10,1],["4th",7.5,1],["5th",6.5,1],["6th",5.5,1],["7th",4.5,1],["8th",3,1],["9th",1.75,1],["10th",1.25,1],["11th-15th",0.95,5],["16th-20th",0.75,5],["21st-30th",0.5,10],["31st-40th",0.35,10],["41st-50th",0.3,10]]],
- [501,600,   [["1st",25,1],["2nd",15,1],["3rd",9.5,1],["4th",7,1],["5th",6,1],["6th",5,1],["7th",4,1],["8th",3,1],["9th",1.75,1],["10th",1.25,1],["11th-15th",0.95,5],["16th-20th",0.75,5],["21st-30th",0.5,10],["31st-40th",0.35,10],["41st-50th",0.3,10],["51st-60th",0.25,10]]],
- [601,800,   [["1st",25,1],["2nd",14.5,1],["3rd",9.25,1],["4th",6.75,1],["5th",5.75,1],["6th",4.75,1],["7th",3.75,1],["8th",3,1],["9th",1.75,1],["10th",1.25,1],["11th-15th",0.95,5],["16th-20th",0.75,5],["21st-30th",0.5,10],["31st-40th",0.35,10],["41st-50th",0.3,10],["51st-60th",0.25,10],["61st-70th",0.2,10]]],
- [801,1000,  [["1st",25,1],["2nd",14,1],["3rd",9,1],["4th",6.5,1],["5th",5.5,1],["6th",4.5,1],["7th",3.5,1],["8th",2.75,1],["9th",1.5,1],["10th",1,1],["11th-15th",0.9,5],["16th-20th",0.7,5],["21st-30th",0.5,10],["31st-40th",0.35,10],["41st-50th",0.3,10],["51st-60th",0.25,10],["61st-70th",0.2,10],["71st-90th",0.15,20]]],
- [1001,9999, [["1st",25,1],["2nd",14,1],["3rd",9,1],["4th",6.5,1],["5th",5.25,1],["6th",4.25,1],["7th",3.25,1],["8th",2.25,1],["9th",1.5,1],["10th",1,1],["11th-15th",0.85,5],["16th-20th",0.65,5],["21st-30th",0.4,10],["31st-40th",0.35,10],["41st-50th",0.3,10],["51st-60th",0.25,10],["61st-70th",0.2,10],["71st-90th",0.15,20],["91st-110th",0.125,20]]],
-];
+// PT is loaded from themes/default.json in loadTheme() — do not hardcode here
+let PT=[], PT_PCT=0;  // PT_PCT>0 → per-placing mode (ceil(entries×PT_PCT/100))
 
 // ─────────────────────────────────────────────────────────
 // STATE
@@ -288,7 +274,39 @@ function snapRound(n,to){
   return Math.round(n/to)*to;
 }
 
+// Snap all row prizes and enforce gap-monotonicity:
+// gaps between consecutive places must be non-increasing from top down
+// (bigger jumps near the top, never a larger jump below a smaller one).
+// Works on ROWS (grouped); returns array of snapped prizes indexed by ROWS.
+// Rows with pinSnap=true were manually set by the user — skip enforcement for those.
+function snapDisplay(rows,to){
+  if(!to) return rows.map(r=>r.prize);
+  // pinSnap rows were manually edited — use exact prize, skip snap AND enforcement
+  const s=rows.map(r=>r.pinSnap ? r.prize : Math.round(r.prize/to)*to);
+  // scan bottom-up: if gap below position i > gap above, nudge i DOWN only.
+  // Any drift created is redistributed to the last unlocked place.
+  const preTot=rows.reduce((sum,r,i)=>sum+s[i]*r.count,0);
+  for(let i=s.length-2;i>=1;i--){
+    if(rows[i].pinSnap) continue;
+    while(s[i]-s[i+1] > s[i-1]-s[i] && s[i]>s[i+1]) s[i]-=to;
+  }
+  // Redistribute drift created by enforcement to the first unlocked place (1st is
+  // always safe — adding to the top prize never creates a gap inversion).
+  const drift=preTot-rows.reduce((sum,r,i)=>sum+s[i]*r.count,0);
+  if(drift!==0){
+    for(let i=0;i<s.length;i++){
+      if(!rows[i].pinSnap){ s[i]+=drift/rows[i].count; break; }
+    }
+  }
+  return s;
+}
+
 function getStruct(n){
+  if(PT_PCT>0){
+    const places=Math.ceil(n*PT_PCT/100);
+    const b=PT.find(e=>e[0]===places)||PT[PT.length-1];
+    return b[1].map(r=>({label:r[0],pct:r[1],count:r[2]}));
+  }
   for(const[lo,hi,rows]of PT)
     if(n>=lo&&n<=hi) return rows.map(r=>({label:r[0],pct:r[1],count:r[2]}));
   return PT[PT.length-1][2].map(r=>({label:r[0],pct:r[1],count:r[2]}));
@@ -356,11 +374,11 @@ function scaleUnlocked(rows,pool){
   if(ft>0&&rem>0){const sc=rem/ft; rows.forEach(r=>{if(!r.locked)r.prize*=sc;});}
 }
 
-// Grand totals using SNAP rounding
-function grandTotal(){ return ROWS.reduce((s,r)=>s+snapRound(r.prize,SNAP)*r.count,0); }
+// Grand totals using SNAP rounding (with gap-monotonicity enforcement)
+function grandTotal(){ const sv=snapDisplay(ROWS,SNAP); return ROWS.reduce((s,r,i)=>s+sv[i]*r.count,0); }
 function grandPct(){   return ROWS.reduce((s,r)=>s+(r.prize/POOL)*100*r.count,0); }
 // When rounding is active use rounded prizes for % — reflects what actually gets paid
-function displayPct(){ return SNAP ? ROWS.reduce((s,r)=>s+(snapRound(r.prize,SNAP)/POOL)*100*r.count,0) : grandPct(); }
+function displayPct(){ if(!SNAP) return grandPct(); const sv=snapDisplay(ROWS,SNAP); return ROWS.reduce((s,r,i)=>s+(sv[i]/POOL)*100*r.count,0); }
 
 // ─────────────────────────────────────────────────────────
 // UI
@@ -453,11 +471,24 @@ function render(){
   const expand=$('f-expand').checked;
   const displayRows=expand ? expandRows(ROWS) : ROWS;
 
+  // Pre-compute monotone-enforced snap values (indexed by ROWS)
+  const snapVals=snapDisplay(ROWS,SNAP);
+  // Helper: map a displayRows index back to its ROWS index
+  function snapOf(i){
+    if(!expand) return snapVals[i];
+    let pos=0;
+    for(let ri=0;ri<ROWS.length;ri++){
+      if(i<pos+ROWS[ri].count) return snapVals[ri];
+      pos+=ROWS[ri].count;
+    }
+    return snapVals[snapVals.length-1];
+  }
+
   const tot=grandTotal();
   const totp=displayPct();
   const pOk=Math.abs(totp-100)<0.5;
   const exactPool=ROWS.reduce((s,r)=>s+r.prize*r.count,0);
-  const roundedTotal=ROWS.reduce((s,r)=>s+snapRound(r.prize,SNAP)*r.count,0);
+  const roundedTotal=ROWS.reduce((s,r,i)=>s+snapVals[i]*r.count,0);
   const drift=roundedTotal-POOL;
   const driftOk=Math.abs(drift)<0.01;
 
@@ -484,7 +515,8 @@ function render(){
     const onchgPrize=needSplit?`editPrizeAt(${editIdx},${withinIdx},this.value)`:`editPrize(${editIdx},this.value)`;
 
     const rawPrize=r.prize;
-    const dispPrize=snapRound(rawPrize,SNAP);
+    const dispPrize=SNAP?snapOf(i):rawPrize;
+    const isPinned=SNAP&&ROWS[editIdx].pinSnap;
     const pEach=(rawPrize/POOL*100).toFixed(3);
     const low=(MINCASH>0&&rawPrize<MINCASH-0.01)
       ?'<span style="background:var(--red);color:#fff;font-size:.55rem;padding:1px 4px;border-radius:3px;margin-left:3px;">LOW</span>':'';
@@ -492,7 +524,7 @@ function render(){
     h+=`<tr>
       <td class="pos">${r.label}${r.locked?lockBadge(editIdx,r):''}</td>
       <td class="r"><input class="w75" type="number" step="0.001" value="${pEach}" onchange="${onchgPct}"></td>
-      <td class="r"><input class="w100" type="number" step="1" value="${dispPrize.toFixed(SNAP?0:2)}" onchange="${onchgPrize}">${low}</td>
+      <td class="r"><input class="w100" type="number" step="${isPinned?1:(SNAP||1)}" value="${dispPrize%1?dispPrize.toFixed(2):dispPrize.toFixed(0)}" onchange="${onchgPrize}">${low}</td>
       <td class="r rt">${fmt(dispPrize*r.count)}${r.count>1?`<br><span style="font-size:.65rem;color:var(--dim);">×${r.count}</span>`:''}</td>
     </tr>`;
   });
@@ -515,12 +547,12 @@ function render(){
 
 function editPct(i,v){
   const p=parseFloat(v); if(isNaN(p)||p<0)return;
-  ROWS[i].prize=(p/100)*POOL; ROWS[i].locked=false;
+  ROWS[i].prize=(p/100)*POOL; ROWS[i].locked=false; ROWS[i].pinSnap=!!SNAP;
   render(); renderFB(); updateStatus();
 }
 function editPrize(i,v){
   const p=parseFloat(v); if(isNaN(p)||p<0)return;
-  ROWS[i].prize=p; ROWS[i].locked=false;
+  ROWS[i].prize=p; ROWS[i].locked=false; ROWS[i].pinSnap=!!SNAP;
   render(); renderFB(); updateStatus();
 }
 
@@ -529,7 +561,7 @@ function editPrize(i,v){
 function editPrizeAt(bracketIdx,withinIdx,val){
   const p=parseFloat(val); if(isNaN(p)||p<0)return;
   const b=ROWS[bracketIdx];
-  if(b.count===1){ b.prize=p; b.locked=false; }
+  if(b.count===1){ b.prize=p; b.locked=false; b.pinSnap=!!SNAP; }
   else {
     // 1-indexed position of the first place in this bracket
     let startPos=1;
@@ -541,7 +573,7 @@ function editPrizeAt(bracketIdx,withinIdx,val){
       split.push({label:withinIdx===1?ordinal(s):`${ordinal(s)}-${ordinal(e)}`,count:withinIdx,prize:b.prize,locked:b.locked});
     }
     // The individually edited place
-    split.push({label:ordinal(startPos+withinIdx),count:1,prize:p,locked:false});
+    split.push({label:ordinal(startPos+withinIdx),count:1,prize:p,locked:false,pinSnap:!!SNAP});
     // Slice after the edited place
     const afterCount=b.count-withinIdx-1;
     if(afterCount>0){
@@ -578,9 +610,17 @@ function updateStatus(){
   const last=ROWS[ROWS.length-1];
   if(!MINCASH){$('s-min').textContent='Not set';$('s-min').className='sv';}
   else{
-    const ok=last.prize>=MINCASH-0.01;
-    $('s-min').textContent=(ok?'✓ ':'⚠ ')+fmt(snapRound(last.prize,SNAP));
-    $('s-min').className='sv '+(ok?'ok':'bad');
+    const allLocked=ROWS.every(r=>r.locked);
+    if(allLocked){
+      const places=ROWS.reduce((s,r)=>s+r.count,0);
+      const maxMC=Math.floor(POOL/places);
+      $('s-min').textContent=`⚠ Too high — reduce below ${fmt(maxMC)}`;
+      $('s-min').className='sv bad';
+    } else {
+      const ok=last.prize>=MINCASH-0.01;
+      $('s-min').textContent=(ok?'✓ ':'⚠ ')+fmt(snapRound(last.prize,SNAP));
+      $('s-min').className='sv '+(ok?'ok':'bad');
+    }
   }
 
   if(GFIRST>0){
@@ -596,7 +636,8 @@ function updateStatus(){
   $('s-mode').textContent=mn[CURVE]||'Standard';
 
   if(SNAP){
-    const drift=ROWS.reduce((s,r)=>s+snapRound(r.prize,SNAP)*r.count,0)-POOL;
+    const sv=snapDisplay(ROWS,SNAP);
+    const drift=ROWS.reduce((s,r,i)=>s+sv[i]*r.count,0)-POOL;
     $('s-round-wrap').style.display='flex';
     const sign=drift>=0?'+':'';
     $('s-round').textContent=sign+fmt(drift);
@@ -612,6 +653,16 @@ function updateStatus(){
 function renderFB(){
   const expand=$('f-expand').checked;
   const displayRows=expand ? expandRows(ROWS) : ROWS;
+  const snapVals=snapDisplay(ROWS,SNAP);
+  function fbSnapOf(i){
+    if(!expand) return snapVals[i];
+    let pos=0;
+    for(let ri=0;ri<ROWS.length;ri++){
+      if(i<pos+ROWS[ri].count) return snapVals[ri];
+      pos+=ROWS[ri].count;
+    }
+    return snapVals[snapVals.length-1];
+  }
   const mn={table:'Standard Table',gentle:'Exponential (Gentle)',medium:'Exponential (Medium)',steep:'Exponential (Steep)'};
   const fbHeader=THEME.fbHeader||'🃏 TOURNAMENT PAYOUT STRUCTURE 🃏';
   const fbFooter=THEME.fbFooter||'Good luck at the tables! 🎰';
@@ -621,7 +672,7 @@ function renderFB(){
     `Structure: ${mn[CURVE]||'Standard'}`,
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
   ];
-  displayRows.forEach(r=>lines.push(`${r.label.padEnd(16)}${fmt(snapRound(r.prize,SNAP))}`));
+  displayRows.forEach((r,i)=>lines.push(`${r.label.padEnd(16)}${fmt(fbSnapOf(i))}`));
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push(fbFooter);
   $('fb-out').textContent=lines.join('\n');
@@ -640,20 +691,17 @@ function copyFB(){
 async function loadTheme(){
   const params=new URLSearchParams(window.location.search);
   const club=params.get('club')||'default';
-  let theme;
-  try{
-    const res=await fetch(`themes/${club}.json`);
-    if(!res.ok) throw new Error('not found');
-    theme=await res.json();
-  }catch(_){
-    if(club!=='default'){
-      try{
-        const res2=await fetch('themes/default.json');
-        if(res2.ok) theme=await res2.json();
-      }catch(_){ /* use CSS defaults */ }
-    }
-  }
-  if(theme) applyTheme(theme);
+
+  // Fetch both themes in parallel so they can be applied back-to-back
+  // with no intermediate repaint (eliminates flash of default branding).
+  const fetchJson=async url=>{try{const r=await fetch(url);return r.ok?await r.json():null;}catch(_){return null;}};
+  const [defaultTheme,clubTheme]=await Promise.all([
+    fetchJson('themes/default.json'),
+    club!=='default'?fetchJson(`themes/${club}.json`):Promise.resolve(null)
+  ]);
+
+  if(defaultTheme) applyTheme(defaultTheme);
+  if(clubTheme)    applyTheme(clubTheme);
 }
 
 function applyTheme(theme){
@@ -680,9 +728,17 @@ function applyTheme(theme){
     document.title=theme.name+' — Payout Calculator';
   }
 
-  // Custom payout table: [{min, max, rows:[[label,pct,count],...]}]
+  // Custom payout table — two formats:
+  //   range-based:    [{min, max, rows}]  → range lookup by entry count
+  //   per-placing:    [{places, rows}]    → lookup by ceil(entries × payoutPct/100)
   if(Array.isArray(theme.payoutTable)){
-    PT=theme.payoutTable.map(b=>[b.min,b.max,b.rows]);
+    if(theme.payoutPct && theme.payoutTable[0]?.places!==undefined){
+      PT_PCT=theme.payoutPct;
+      PT=theme.payoutTable.map(b=>[b.places,b.rows]);
+    }else{
+      PT_PCT=0;
+      PT=theme.payoutTable.map(b=>[b.min,b.max,b.rows]);
+    }
   }
 }
 

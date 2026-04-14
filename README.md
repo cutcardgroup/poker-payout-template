@@ -66,6 +66,16 @@ npx serve . -p 3000
 `payoutTable` is optional — omit it to use the built-in default table.
 Each color key maps to the CSS variable `--<key>` on `:root`.
 
+## Testing
+
+The test script mirrors the calculation logic from `index.html` and must pass before every commit:
+
+```bash
+node scripts/test-payouts.js
+```
+
+Covers: bracket selection, pool conservation, min-cash locking, guaranteed first, float precision, snap gap-inversion correction, and theme JSON validation. Run it any time you edit payout logic or theme files.
+
 ## Deploy to Cloudflare Pages
 
 1. Connect this repo to a Cloudflare Pages project (no build command needed)

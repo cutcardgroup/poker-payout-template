@@ -172,7 +172,10 @@ table.pt-tbl .count{color:#8a9b80;text-align:right;font-size:.68rem;}
 </div>
 
 <script>
-const KNOWN_THEMES = ['default', 'spt', 'matchroom', 'barmera'];
+const KNOWN_THEMES = ['default', 'spt', 'matchroom', 'riverlandpoker'];
+
+// Default payout table — loaded from themes/default.json (single source of truth)
+let DEFAULT_PT = null;
 
 function buildChips() {
   ['chips','known-chips'].forEach(id => {
@@ -224,6 +227,16 @@ function renderPayoutPanel(theme, club) {
   const body     = document.getElementById('pt-body');
   const swatches = document.getElementById('pt-swatches');
 
+  // ── Logo ─────────────────────────────────────────────────
+  if (theme && theme.logo) {
+    swatches.innerHTML = `<div style="padding:8px 14px;border-bottom:1px solid #1a2e22;background:#111a14;">
+      <img src="${theme.logo}" alt="${theme.name || club}"
+           style="max-height:44px;max-width:220px;object-fit:contain;display:block;">
+    </div>`;
+  } else {
+    swatches.innerHTML = '';
+  }
+
   // ── Colour swatches ──────────────────────────────────────
   if (theme && theme.colors && Object.keys(theme.colors).length) {
     const html = Object.entries(theme.colors).map(([k,v]) => `
@@ -231,28 +244,27 @@ function renderPayoutPanel(theme, club) {
         <div class="swatch" style="background:${v}"></div>
         <div class="swatch-lbl">${k}</div>
       </div>`).join('');
-    swatches.innerHTML = `<div class="swatches">${html}</div>`;
-  } else {
-    swatches.innerHTML = '';
+    swatches.innerHTML += `<div class="swatches">${html}</div>`;
   }
 
   // ── Payout table ─────────────────────────────────────────
+  let brackets;
+  let usingDefault = false;
+
   if (!theme) {
-    body.innerHTML = `<div class="default-notice"><div class="icon">⚠</div>Could not load theme — showing default table</div>`;
-    return;
+    brackets = DEFAULT_PT;
+    usingDefault = true;
+  } else if (!theme.payoutTable) {
+    brackets = DEFAULT_PT;
+    usingDefault = true;
+  } else {
+    brackets = theme.payoutTable;
   }
-
-  if (!theme.payoutTable) {
-    body.innerHTML = `<div class="default-notice">
-      <div class="icon">♠</div>
-      <strong style="color:#e8ead8;">${theme.name || club}</strong> uses the<br>built-in default payout table.<br>
-      <span style="font-size:.7rem;margin-top:6px;display:block;">Add a <code style="background:#111;padding:1px 4px;border-radius:2px;">payoutTable</code> key to the theme JSON to override.</span>
-    </div>`;
-    return;
-  }
-
-  const brackets = theme.payoutTable;
-  let html = '';
+  let html = usingDefault
+    ? `<div class="default-notice" style="padding:8px 12px;margin-bottom:8px;border-radius:5px;border:1px solid #1a2e22;text-align:left;font-size:.7rem;color:#4a6050;">
+        ♠ Showing built-in default table${theme ? ` — <em>${theme.name || club}</em> has no custom payoutTable` : ''}
+       </div>`
+    : '';
 
   brackets.forEach((b, bi) => {
     const places = b.rows.reduce((s, r) => s + r[2], 0);
@@ -260,9 +272,11 @@ function renderPayoutPanel(theme, club) {
     const pctOk = Math.abs(totalPct - 100) < 0.1;
     const pctChip = `<span class="pct-chip${pctOk?'':' bad'}">${totalPct.toFixed(2)}%</span>`;
 
-    const rangeLabel = b.max >= 9999
-      ? `${b.min}+ players`
-      : `${b.min}–${b.max} players`;
+    const rangeLabel = b.places !== undefined
+      ? `${b.places} place${b.places !== 1 ? 's' : ''}`
+      : b.max >= 9999
+        ? `${b.min}+ players`
+        : `${b.min}–${b.max} players`;
 
     // Expand rows with count > 1 for display
     let rowHtml = '';
@@ -308,7 +322,13 @@ function openNew() {
   window.open(`index.html?club=${encodeURIComponent(club)}`, '_blank');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // Load default PT from single source of truth before building UI
+  try {
+    const r = await fetch('themes/default.json');
+    if (r.ok) DEFAULT_PT = (await r.json()).payoutTable || null;
+  } catch(_) {}
+
   buildChips();
   document.getElementById('club-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') loadPreview();
