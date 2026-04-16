@@ -152,6 +152,16 @@ npx serve . -p 3000
 # Admin preview: http://localhost:3000/admin.html
 ```
 
+## Payout modes
+
+The calculator offers three payout structure modes, selectable via the button strip in the UI:
+
+| Mode | Description |
+|------|-------------|
+| **Standard** | Geometric decay from 3rd place down (rate 0.82). 1st/2nd and 2nd/3rd ratios are fixed at the top (default 1.45× and 1.30×). Ratios are adjustable via the expand toggle. |
+| **Standard (old)** | Classic bracket table lookup — uses the `payoutTable` percentages directly from the theme JSON (or built-in default). |
+| **Curve** | Exponential curve with three presets: Gentle, Medium, Steep. |
+
 ## Adding an operator
 
 1. Copy `themes/example.json` → `themes/yourclub.json` and edit it
@@ -159,7 +169,7 @@ npx serve . -p 3000
 3. Add your hostname to `_worker.js` → `HOSTNAME_MAP`
 4. Deploy — done
 
-## Theme JSON format
+## Theme JSON format — range-based
 
 ```json
 {
@@ -186,7 +196,23 @@ npx serve . -p 3000
 }
 ```
 
-`payoutTable` is optional — omit it to use the built-in default table.
+## Theme JSON format — per-placing
+
+Pay a fixed percentage of entries with an explicit table per placing count. `payoutPct` sets what percentage of entries are paid (e.g. `13` = top 13%).
+
+```json
+{
+  "name": "My Club",
+  "logo": "logos/myclub.png",
+  "payoutPct": 13,
+  "payoutTable": [
+    { "places": 2, "rows": [["1st",80,1],["2nd",20,1]] },
+    { "places": 3, "rows": [["1st",50,1],["2nd",30,1],["3rd",20,1]] }
+  ]
+}
+```
+
+`payoutTable` is optional in either format — omit it to use the built-in default table.
 Each color key maps to the CSS variable `--<key>` on `:root`.
 
 ## Testing
@@ -197,7 +223,7 @@ The test script mirrors the calculation logic from `index.html` and must pass be
 node scripts/test-payouts.js
 ```
 
-Covers: bracket selection, pool conservation, min-cash locking, guaranteed first, float precision, snap gap-inversion correction, and theme JSON validation. Run it any time you edit payout logic or theme files.
+Covers: bracket selection, pool conservation, min-cash locking, guaranteed first, float precision, snap gap-inversion correction, Standard curve structure (ratio caps, monotone decay, grouped brackets), and theme JSON validation. Run it any time you edit payout logic or theme files.
 
 ## Deploy to Cloudflare Pages
 

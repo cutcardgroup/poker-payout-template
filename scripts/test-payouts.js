@@ -324,10 +324,14 @@ function snapDisplay(rows, to) {
   if (!to) return rows.map(r => r.prize);
   const s = rows.map(r => r.pinSnap ? r.prize : Math.round(r.prize / to) * to);
   const preTot = rows.reduce((sum, r, i) => sum + s[i] * r.count, 0);
-  for (let i = s.length - 2; i >= 1; i--) {
-    if (rows[i].pinSnap) continue;
-    while (s[i] - s[i+1] > s[i-1] - s[i] && s[i] > s[i+1]) s[i] -= to;
-  }
+  let changed;
+  do {
+    changed = false;
+    for (let i = s.length - 2; i >= 1; i--) {
+      if (rows[i].pinSnap) continue;
+      if (s[i] - s[i+1] >= s[i-1] - s[i] && s[i] > s[i+1]) { s[i] -= to; changed = true; }
+    }
+  } while (changed);
   const drift = preTot - rows.reduce((sum, r, i) => sum + s[i] * r.count, 0);
   if (drift !== 0) {
     for (let i = 0; i < s.length; i++) {
@@ -367,16 +371,16 @@ testSnap('Test 21 — snap gap inversion: nudge-down corrects inversion, drift g
   const rawTotal = rows.reduce((sum, r) => sum + r.prize * r.count, 0);  // 2350
   const snapTotal = s.reduce((sum, v) => sum + v, 0);
 
-  assert(errors, Math.abs(s[0] - 1050) < 0.01, `1st should receive drift → $1,050; got $${s[0]}`);
+  assert(errors, Math.abs(s[0] - 1100) < 0.01, `1st should receive drift → $1,100; got $${s[0]}`);
   assert(errors, Math.abs(s[1] -  650) < 0.01, `2nd should be $650; got $${s[1]}`);
-  assert(errors, Math.abs(s[2] -  450) < 0.01, `3rd should be nudged to $450; got $${s[2]}`);
+  assert(errors, Math.abs(s[2] -  400) < 0.01, `3rd should be nudged to $400; got $${s[2]}`);
   assert(errors, Math.abs(s[3] -  250) < 0.01, `4th should be unchanged at $250; got $${s[3]}`);
 
-  // no gap inversions
+  // gaps strictly decreasing (each gap must be less than the gap above)
   for (let i = 1; i < s.length - 1; i++) {
     const gapAbove = s[i-1] - s[i];
     const gapBelow = s[i]   - s[i+1];
-    assert(errors, gapBelow <= gapAbove, `Gap inversion at position ${i+1}: gap below ($${gapBelow}) > gap above ($${gapAbove})`);
+    assert(errors, gapBelow < gapAbove, `Equal/inverted gap at position ${i+1}: gap below ($${gapBelow}) >= gap above ($${gapAbove})`);
   }
 
   // snap total preserved
@@ -396,6 +400,166 @@ testSnap('Test 22 — pinSnap row skips enforcement: manually pinned prize is ne
   ];
   const s = snapDisplay(rows, 50);
   assert(errors, Math.abs(s[2] - 475) < 0.01, `Pinned 3rd should stay at $475; got $${s[2]}`);
+});
+
+// $100 snap — engineered inversion: 3rd rounds up to $2,400, creating gap 3rd→4th ($900)
+// larger than gap 2nd→3rd ($700). Enforcement nudges 3rd down twice to $2,200.
+// $200 drift redistributed to 1st → $5,200. Gaps: $2,100 / $900 / $700 / $600 ✓
+testSnap('Test 23 — $100 snap: inversion corrected, drift to 1st, gaps strictly decreasing', errors => {
+  const rows = [
+    { prize: 5000, count: 1, pinSnap: false },
+    { prize: 3100, count: 1, pinSnap: false },
+    { prize: 2350, count: 1, pinSnap: false },
+    { prize: 1450, count: 1, pinSnap: false },
+    { prize:  900, count: 1, pinSnap: false },
+  ];
+  const s = snapDisplay(rows, 100);
+
+  assert(errors, Math.abs(s[0] - 5200) < 0.01, `1st should receive drift → $5,200; got $${s[0]}`);
+  assert(errors, Math.abs(s[1] - 3100) < 0.01, `2nd should be $3,100; got $${s[1]}`);
+  assert(errors, Math.abs(s[2] - 2200) < 0.01, `3rd should be nudged to $2,200; got $${s[2]}`);
+  assert(errors, Math.abs(s[3] - 1500) < 0.01, `4th should be $1,500; got $${s[3]}`);
+  assert(errors, Math.abs(s[4] -  900) < 0.01, `5th should be $900; got $${s[4]}`);
+
+  for (let i = 1; i < s.length - 1; i++) {
+    const gapAbove = s[i-1] - s[i], gapBelow = s[i] - s[i+1];
+    assert(errors, gapBelow < gapAbove, `Equal/inverted gap at position ${i+1}: below=$${gapBelow} above=$${gapAbove}`);
+  }
+  const preSnap = rows.map(r => Math.round(r.prize / 100) * 100).reduce((a, v) => a + v, 0);
+  assert(errors, Math.abs(s.reduce((a,v)=>a+v,0) - preSnap) < 0.01, `Snap total should equal pre-enforcement snap total $${preSnap}`);
+});
+
+// $66 snap (custom unit) — engineered inversion: 3rd rounds to $1,320, creating gap
+// 3rd→4th ($528) larger than gap 2nd→3rd ($462). Nudged to $1,254. $66 drift to 1st.
+// Gaps: $1,254 / $528 / $462 ✓  (also verifies non-standard snap units work correctly)
+testSnap('Test 24 — $66 custom snap: non-standard unit enforces strict gaps, drift to 1st', errors => {
+  const rows = [
+    { prize: 3000, count: 1, pinSnap: false },
+    { prize: 1800, count: 1, pinSnap: false },
+    { prize: 1350, count: 1, pinSnap: false },
+    { prize:  800, count: 1, pinSnap: false },
+  ];
+  const s = snapDisplay(rows, 66);
+
+  assert(errors, Math.abs(s[0] - 3036) < 0.01, `1st should receive drift → $3,036; got $${s[0]}`);
+  assert(errors, Math.abs(s[1] - 1782) < 0.01, `2nd should be $1,782; got $${s[1]}`);
+  assert(errors, Math.abs(s[2] - 1254) < 0.01, `3rd should be nudged to $1,254; got $${s[2]}`);
+  assert(errors, Math.abs(s[3] -  792) < 0.01, `4th should be $792; got $${s[3]}`);
+
+  for (let i = 1; i < s.length - 1; i++) {
+    const gapAbove = s[i-1] - s[i], gapBelow = s[i] - s[i+1];
+    assert(errors, gapBelow < gapAbove, `Equal/inverted gap at position ${i+1}: below=$${gapBelow} above=$${gapAbove}`);
+  }
+  const preSnap = rows.map(r => Math.round(r.prize / 66) * 66).reduce((a, v) => a + v, 0);
+  assert(errors, Math.abs(s.reduce((a,v)=>a+v,0) - preSnap) < 0.01, `Snap total should equal pre-enforcement snap total $${preSnap}`);
+});
+
+// ── Category E: Standard structure ─────────────────────────────────────
+// Mirrors buildStandardNew() from index.html exactly.
+// 1st = 2nd × 1.45, 2nd = 3rd × 1.30, 3rd+ = 82% geometric decay.
+// Brackets with count>1 use average weight of their constituent positions.
+function buildStandardNew(struct, pool) {
+  const DECAY = 0.82, CAP12 = 1.45, CAP23 = 1.30;
+  const n = struct.reduce((s, r) => s + r.count, 0);
+  if (!n) return [];
+  const w = new Array(n).fill(1.0);
+  for (let i = n - 2; i >= 2; i--) w[i] = w[i + 1] / DECAY;
+  if (n >= 3) { w[1] = w[2] * CAP23; w[0] = w[1] * CAP12; }
+  else if (n === 2) { w[0] = w[1] * CAP12; }
+  let pos = 0;
+  const rows = struct.map(r => {
+    let ws = 0;
+    for (let j = 0; j < r.count; j++) ws += w[pos + j];
+    pos += r.count;
+    return { label: r.label, count: r.count, prize: ws / r.count, locked: false };
+  });
+  const tw = rows.reduce((s, r) => s + r.prize * r.count, 0);
+  rows.forEach(r => r.prize = r.prize / tw * pool);
+  return rows;
+}
+
+function calculateNew({ entries, pool, minCash = 0, guaranteedFirst = 0 }) {
+  const struct = getStruct(entries);
+  let rows = buildStandardNew(struct, pool);
+
+  if (minCash > 0) {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (rows[i].prize < minCash) { rows[i].prize = minCash; rows[i].locked = true; }
+      else break;
+    }
+  }
+  scaleUnlocked(rows, pool);
+
+  if (guaranteedFirst > 0 && rows[0].prize < guaranteedFirst) {
+    rows[0].prize = guaranteedFirst; rows[0].locked = true;
+    scaleUnlocked(rows, pool);
+  }
+
+  const places = rows.reduce((s, r) => s + r.count, 0);
+  const total  = rows.reduce((s, r) => s + r.prize * r.count, 0);
+  return { rows, places, total, firstPrize: rows[0].prize };
+}
+
+function testNew(name, fn) {
+  const errors = [];
+  try { fn(errors); } catch(e) { errors.push(`Threw: ${e.message}`); }
+  const ok = errors.length === 0;
+  console.log(`\n${ok?'✓':'✗'} ${name}`);
+  errors.forEach(e => console.log(`  ✗ ${e}`));
+  if (ok) { passed++; console.log('  ✓ all assertions passed'); }
+  else failed++;
+}
+
+testNew('Test 25 — Standard: pool conserved, same places as Standard (old) (100 entries)', errors => {
+  const standard = calculate({ entries: 100, pool: 20000 });
+  const newCalc  = calculateNew({ entries: 100, pool: 20000 });
+  assert(errors, newCalc.places === standard.places,
+    `Places should match Standard (${standard.places}); got ${newCalc.places}`);
+  assert(errors, Math.abs(newCalc.total - 20000) < 0.01,
+    `Total should be $20,000; got ${fmt(newCalc.total)}`);
+});
+
+testNew('Test 26 — Standard: ratio caps exactly 1.45/1.30, monotone decay from 3rd (100 entries, all count=1)', errors => {
+  const { rows } = calculateNew({ entries: 100, pool: 20000 });
+  // All rows in this bracket are count=1, so individual ratios are exact
+  const ratio12 = rows[0].prize / rows[1].prize;
+  const ratio23 = rows[1].prize / rows[2].prize;
+  assert(errors, Math.abs(ratio12 - 1.45) < 0.0001,
+    `1st/2nd ratio should be 1.45; got ${ratio12.toFixed(4)}`);
+  assert(errors, Math.abs(ratio23 - 1.30) < 0.0001,
+    `2nd/3rd ratio should be 1.30; got ${ratio23.toFixed(4)}`);
+  // 3rd onwards: each consecutive count=1 pair should have ratio 1/0.82
+  const expectedDecay = 1 / 0.82;
+  for (let i = 2; i < rows.length - 1; i++) {
+    if (rows[i].count === 1 && rows[i + 1].count === 1) {
+      const ratio = rows[i].prize / rows[i + 1].prize;
+      assert(errors, Math.abs(ratio - expectedDecay) < 0.0001,
+        `${rows[i].label}/${rows[i+1].label} ratio should be ${expectedDecay.toFixed(4)}; got ${ratio.toFixed(4)}`);
+    }
+  }
+  // Prizes strictly decreasing
+  for (let i = 0; i < rows.length - 1; i++) {
+    assert(errors, rows[i].prize > rows[i + 1].prize,
+      `${rows[i].label} ($${rows[i].prize.toFixed(2)}) should exceed ${rows[i+1].label} ($${rows[i+1].prize.toFixed(2)})`);
+  }
+});
+
+testNew('Test 27 — Standard grouped brackets: pool conserved, top caps hold (250 entries)', errors => {
+  // 250-entry bracket has 11th-15th×5, 16th-20th×5, 21st-30th×10 (grouped rows)
+  const { rows, total, places } = calculateNew({ entries: 250, pool: 50000 });
+  assert(errors, places === 30, `Places should be 30; got ${places}`);
+  assert(errors, Math.abs(total - 50000) < 0.01, `Total should be $50,000; got ${fmt(total)}`);
+  // Ratio caps still hold at the top (count=1 rows)
+  const ratio12 = rows[0].prize / rows[1].prize;
+  const ratio23 = rows[1].prize / rows[2].prize;
+  assert(errors, Math.abs(ratio12 - 1.45) < 0.0001, `1st/2nd ratio: ${ratio12.toFixed(4)}`);
+  assert(errors, Math.abs(ratio23 - 1.30) < 0.0001, `2nd/3rd ratio: ${ratio23.toFixed(4)}`);
+});
+
+testNew('Test 28 — Standard + min-cash: pool conserved after locking', errors => {
+  const { total, places } = calculateNew({ entries: 100, pool: 20000, minCash: 500 });
+  assert(errors, Math.abs(total - 20000) < 0.01, `Total should be $20,000; got ${fmt(total)}`);
+  assert(errors, places === 10, `Places should be 10; got ${places}`);
 });
 
 // ── Theme JSON validation ─────────────────────────────────────────────────────

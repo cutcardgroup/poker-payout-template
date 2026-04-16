@@ -70,6 +70,30 @@ input[type=number]:focus,select:focus{outline:none;border-color:var(--green3);}
 }
 .rtog.active{background:var(--green);border-color:var(--green3);color:#fff;}
 
+/* payout mode toggles */
+.ptog-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;align-items:center;}
+.ptog{
+  background:var(--card2);border:1px solid var(--border);border-radius:5px;
+  color:var(--dim);font-family:'Bebas Neue',cursive;letter-spacing:1px;font-size:.9rem;
+  padding:6px 10px;cursor:pointer;transition:all .15s;
+}
+.ptog.active{background:var(--green);border-color:var(--green3);color:#fff;}
+.cmenu-item{padding:8px 12px;font-size:.82rem;cursor:pointer;color:var(--text);font-family:'Inter',sans-serif;}
+.cmenu-item:hover{background:rgba(26,107,58,.2);}
+
+/* tooltip */
+[data-tip]{position:relative;}
+[data-tip]::after{
+  content:attr(data-tip);
+  position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
+  background:#1a2e1a;border:1px solid var(--border);border-radius:6px;
+  color:var(--text);font-size:.72rem;font-family:'Inter',sans-serif;font-weight:400;
+  line-height:1.5;white-space:normal;width:260px;padding:8px 10px;
+  box-shadow:0 4px 12px rgba(0,0,0,.5);pointer-events:none;
+  opacity:0;transition:opacity .15s;z-index:200;
+}
+[data-tip]:hover::after{opacity:1;}
+
 /* expand toggle */
 .expand-tog{
   display:inline-flex;align-items:center;gap:8px;cursor:pointer;
@@ -155,20 +179,47 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
     <div><label class="lbl">Min Cash ($)</label><input type="number" id="f-mincash" placeholder="e.g. 700" min="0"></div>
   </div>
 
+  <div class="slbl">Payout Structure</div>
+  <div class="ptog-row" style="margin-bottom:10px;">
+    <button class="ptog active" id="ptog-standard" onclick="setPayoutMode('standard')">Standard</button>
+    <button class="ptog" id="ptog-old" onclick="setPayoutMode('standard-old')">Standard (old)</button>
+    <div style="position:relative;display:inline-block;">
+      <button class="ptog" id="ptog-curve" onclick="toggleCurveMenu(this)">Curve ▾</button>
+      <div id="curve-menu" style="display:none;position:absolute;top:110%;left:0;background:var(--card2);border:1px solid var(--border);border-radius:6px;z-index:100;min-width:140px;box-shadow:0 4px 12px rgba(0,0,0,.4);">
+        <div class="cmenu-item" onclick="selectCurve('gentle')">Gentle</div>
+        <div class="cmenu-item" onclick="selectCurve('medium')">Medium</div>
+        <div class="cmenu-item" onclick="selectCurve('steep')">Steep</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="stdnew-params" style="display:block;margin-bottom:10px;">
+    <span id="ratio-summary" onclick="toggleRatios()"
+      data-tip="Sets the prize gap at the top. 1.45× means 1st wins 45% more than 2nd; 1.30× means 2nd wins 30% more than 3rd. Places from 3rd down decay at a fixed rate."
+      style="font-size:.72rem;color:var(--dim);cursor:pointer;user-select:none;">
+      Ratios: <span id="ratio-display">1.45× / 1.30×</span> &nbsp;<span style="font-size:.65rem;">▾ adjust</span>
+    </span>
+    <div id="ratio-fields" style="display:none;margin-top:8px;">
+      <div class="g2" style="max-width:280px;">
+        <div>
+          <label class="lbl">1st / 2nd ratio</label>
+          <input type="number" id="f-cap12" value="1.45" min="1.01" max="3" step="0.01"
+            onchange="updateRatioDisplay();if(ROWS.length)go()">
+        </div>
+        <div>
+          <label class="lbl">2nd / 3rd ratio</label>
+          <input type="number" id="f-cap23" value="1.30" min="1.01" max="3" step="0.01"
+            onchange="updateRatioDisplay();if(ROWS.length)go()">
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="slbl">Options</div>
-  <div class="g4">
+  <div class="g3">
     <div>
       <label class="lbl">Override Places Paid</label>
       <input type="number" id="f-places" placeholder="auto" min="1">
-    </div>
-    <div>
-      <label class="lbl">Payout Curve</label>
-      <select id="f-curve">
-        <option value="table">Standard Table</option>
-        <option value="gentle">Exponential — Gentle</option>
-        <option value="medium">Exponential — Medium</option>
-        <option value="steep">Exponential — Steep</option>
-      </select>
     </div>
     <div>
       <label class="lbl">Guaranteed 1st</label>
@@ -192,6 +243,13 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
     <button class="rtog" data-v="10" onclick="setRound(10,this)">$10</button>
     <button class="rtog" data-v="25" onclick="setRound(25,this)">$25</button>
     <button class="rtog" data-v="50" onclick="setRound(50,this)">$50</button>
+    <button class="rtog" data-v="100" onclick="setRound(100,this)">$100</button>
+    <button class="rtog" id="rtog-custom" onclick="toggleCustomRound(this)">Custom</button>
+    <input id="custom-round-input" type="number" min="1" step="1"
+      placeholder="e.g. 75"
+      style="display:none;width:80px;padding:4px 6px;border:1px solid var(--border);background:var(--card2);color:var(--text);border-radius:4px;font-size:13px;"
+      onkeydown="if(event.key==='Enter')applyCustomRound(this)"
+      onblur="applyCustomRound(this)">
   </div>
 
   <div style="margin-top:10px;">
@@ -255,7 +313,8 @@ let PT=[], PT_PCT=0;  // PT_PCT>0 → per-placing mode (ceil(entries×PT_PCT/100
 // ─────────────────────────────────────────────────────────
 // STATE
 // ─────────────────────────────────────────────────────────
-let ROWS=[], POOL=0, MINCASH=0, ENTRIES=0, GFIRST=0, CURVE='table', SNAP=0;
+let ROWS=[], POOL=0, MINCASH=0, ENTRIES=0, GFIRST=0, SNAP=0;
+let PAYOUT_MODE='standard';
 let THEME={};
 
 // ─────────────────────────────────────────────────────────
@@ -283,13 +342,18 @@ function snapDisplay(rows,to){
   if(!to) return rows.map(r=>r.prize);
   // pinSnap rows were manually edited — use exact prize, skip snap AND enforcement
   const s=rows.map(r=>r.pinSnap ? r.prize : Math.round(r.prize/to)*to);
-  // scan bottom-up: if gap below position i > gap above, nudge i DOWN only.
-  // Any drift created is redistributed to the last unlocked place.
+  // Strict gap enforcement: each gap must be strictly smaller than the gap above
+  // (by at least one snap unit). Repeat bottom-up passes until convergence because
+  // nudging one position can create a new equal-gap situation above it.
   const preTot=rows.reduce((sum,r,i)=>sum+s[i]*r.count,0);
-  for(let i=s.length-2;i>=1;i--){
-    if(rows[i].pinSnap) continue;
-    while(s[i]-s[i+1] > s[i-1]-s[i] && s[i]>s[i+1]) s[i]-=to;
-  }
+  let changed;
+  do {
+    changed=false;
+    for(let i=s.length-2;i>=1;i--){
+      if(rows[i].pinSnap) continue;
+      if(s[i]-s[i+1]>=s[i-1]-s[i] && s[i]>s[i+1]){ s[i]-=to; changed=true; }
+    }
+  } while(changed);
   // Redistribute drift created by enforcement to the first unlocked place (1st is
   // always safe — adding to the top prize never creates a gap inversion).
   const drift=preTot-rows.reduce((sum,r,i)=>sum+s[i]*r.count,0);
@@ -367,6 +431,27 @@ function buildExp(rows,pool,k){
   return tmp.map(r=>({label:r.label,count:r.count,prize:r.w/tw*pool,locked:false}));
 }
 
+// Standard (new): geometric decay from 3rd down, then apply ratio caps at top.
+// 1st = 2nd × 1.40, 2nd = 3rd × 1.28, 3rd+ = 82% geometric decay.
+// Brackets with count>1 get the average weight of their constituent positions.
+function buildStandardNew(struct,pool,cap12,cap23){
+  const DECAY=0.82, CAP12=cap12||1.45, CAP23=cap23||1.30;
+  const n=struct.reduce((s,r)=>s+r.count,0);
+  if(!n) return [];
+  const w=new Array(n).fill(1.0);
+  for(let i=n-2;i>=2;i--) w[i]=w[i+1]/DECAY;
+  if(n>=3){w[1]=w[2]*CAP23; w[0]=w[1]*CAP12;}
+  else if(n===2){w[0]=w[1]*CAP12;}
+  let pos=0;
+  const rows=struct.map(r=>{
+    let ws=0; for(let j=0;j<r.count;j++) ws+=w[pos+j]; pos+=r.count;
+    return {label:r.label,count:r.count,prize:ws/r.count,locked:false};
+  });
+  const tw=rows.reduce((s,r)=>s+r.prize*r.count,0);
+  rows.forEach(r=>r.prize=r.prize/tw*pool);
+  return rows;
+}
+
 function scaleUnlocked(rows,pool){
   const lk=rows.filter(r=>r.locked).reduce((s,r)=>s+r.prize*r.count,0);
   const rem=pool-lk;
@@ -394,7 +479,67 @@ function setRound(v,el){
   SNAP=v;
   document.querySelectorAll('.rtog').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
+  document.getElementById('custom-round-input').style.display='none';
   if(ROWS.length) render(), renderFB(), updateStatus();
+}
+
+function toggleCustomRound(btn){
+  const inp=document.getElementById('custom-round-input');
+  const visible=inp.style.display!=='none';
+  if(visible){ inp.style.display='none'; return; }
+  inp.style.display='inline-block';
+  inp.value='';
+  inp.focus();
+}
+
+function applyCustomRound(inp){
+  const v=parseInt(inp.value,10);
+  if(!v||v<1){ inp.style.display='none'; return; }
+  SNAP=v;
+  document.querySelectorAll('.rtog').forEach(b=>b.classList.remove('active'));
+  document.getElementById('rtog-custom').classList.add('active');
+  document.getElementById('rtog-custom').textContent='$'+v;
+  inp.style.display='none';
+  if(ROWS.length) render(), renderFB(), updateStatus();
+}
+
+function toggleRatios(){
+  const f=document.getElementById('ratio-fields');
+  const open=f.style.display!=='none';
+  f.style.display=open?'none':'block';
+  const s=document.getElementById('ratio-summary');
+  s.querySelector('span:last-child').textContent=open?'▾ adjust':'▴ adjust';
+}
+
+function updateRatioDisplay(){
+  const c12=parseFloat(document.getElementById('f-cap12').value)||1.45;
+  const c23=parseFloat(document.getElementById('f-cap23').value)||1.30;
+  document.getElementById('ratio-display').textContent=c12.toFixed(2)+'× / '+c23.toFixed(2)+'×';
+}
+
+function setPayoutMode(mode){
+  PAYOUT_MODE=mode;
+  document.querySelectorAll('.ptog').forEach(b=>b.classList.remove('active'));
+  const id=mode==='standard'?'ptog-standard':mode==='standard-old'?'ptog-old':'ptog-curve';
+  document.getElementById(id).classList.add('active');
+  document.getElementById('curve-menu').style.display='none';
+  if(!mode.startsWith('curve')) document.getElementById('ptog-curve').textContent='Curve ▾';
+  document.getElementById('stdnew-params').style.display=mode==='standard'?'block':'none';
+}
+
+function toggleCurveMenu(btn){
+  const m=document.getElementById('curve-menu');
+  const open=m.style.display!=='none';
+  m.style.display=open?'none':'block';
+  if(!open){document.querySelectorAll('.ptog').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
+}
+
+function selectCurve(name){
+  PAYOUT_MODE='curve-'+name;
+  document.querySelectorAll('.ptog').forEach(b=>b.classList.remove('active'));
+  document.getElementById('ptog-curve').classList.add('active');
+  document.getElementById('ptog-curve').textContent=name.charAt(0).toUpperCase()+name.slice(1)+' ▾';
+  document.getElementById('curve-menu').style.display='none';
 }
 
 // ─────────────────────────────────────────────────────────
@@ -406,7 +551,6 @@ function go(){
   const mc=parseFloat($('f-mincash').value)||0;
   if(!entries||entries<1||!pool||pool<1){alert('Please enter valid Entries and Prize Pool.');return;}
 
-  const curve=$('f-curve').value;
   const gtype=$('f-gtype').value;
   const gval=parseFloat($('f-gval').value)||0;
   const op=parseInt($('f-places').value)||0;
@@ -415,17 +559,21 @@ function go(){
   if(gtype==='dollar'&&gval>0) gfirst=gval;
   if(gtype==='pct'&&gval>0) gfirst=(gval/100)*pool;
 
-  POOL=pool; MINCASH=mc; ENTRIES=entries; GFIRST=gfirst; CURVE=curve;
+  POOL=pool; MINCASH=mc; ENTRIES=entries; GFIRST=gfirst;
 
   let struct=getStruct(entries);
   if(op>0) struct=applyOverride(struct,op);
 
-  const kMap={gentle:1.2,medium:2.0,steep:3.5};
+  const kMap={'curve-gentle':1.2,'curve-medium':2.0,'curve-steep':3.5};
   let rows;
-  if(curve==='table'){
+  if(PAYOUT_MODE==='standard'){
+    const cap12=parseFloat($('f-cap12').value)||1.45;
+    const cap23=parseFloat($('f-cap23').value)||1.30;
+    rows=buildStandardNew(struct,pool,cap12,cap23);
+  } else if(PAYOUT_MODE==='standard-old'){
     rows=struct.map(r=>({label:r.label,count:r.count,prize:(r.pct/100)*pool,locked:false}));
   } else {
-    rows=buildExp(struct,pool,kMap[curve]);
+    rows=buildExp(struct,pool,kMap[PAYOUT_MODE]||2.0);
   }
 
   // Pass 1: lock bottom rows at min cash
@@ -435,6 +583,27 @@ function go(){
       else break;
     }
   }
+
+  // Pass 1b: merge adjacent locked rows at the same prize into one band
+  // (e.g. two separate min-cash groups both locked at $2,300 → one row)
+  rows=(()=>{
+    const merged=[]; let p=1;
+    for(const r of rows){
+      const prev=merged[merged.length-1];
+      if(prev&&prev.locked&&r.locked&&Math.abs(prev.prize-r.prize)<0.01){
+        prev.count+=r.count;
+        prev._e=p+r.count-1;
+      } else {
+        merged.push({...r,_s:p,_e:p+r.count-1});
+      }
+      p+=r.count;
+    }
+    merged.forEach(r=>{
+      if(r.locked) r.label=r._s===r._e?ordinal(r._s):`${ordinal(r._s)}-${ordinal(r._e)}`;
+      delete r._s; delete r._e;
+    });
+    return merged;
+  })();
 
   // Pass 2: scale unlocked to fill pool
   scaleUnlocked(rows,pool);
@@ -632,8 +801,8 @@ function updateStatus(){
     $('s-g-wrap').style.display='none';
   }
 
-  const mn={table:'Standard',gentle:'Exp Gentle',medium:'Exp Medium',steep:'Exp Steep'};
-  $('s-mode').textContent=mn[CURVE]||'Standard';
+  const mn={'standard':'Standard','standard-old':'Standard (old)','curve-gentle':'Curve Gentle','curve-medium':'Curve Medium','curve-steep':'Curve Steep'};
+  $('s-mode').textContent=mn[PAYOUT_MODE]||'Standard';
 
   if(SNAP){
     const sv=snapDisplay(ROWS,SNAP);
@@ -663,13 +832,13 @@ function renderFB(){
     }
     return snapVals[snapVals.length-1];
   }
-  const mn={table:'Standard Table',gentle:'Exponential (Gentle)',medium:'Exponential (Medium)',steep:'Exponential (Steep)'};
+  const mn={'standard':'Standard','standard-old':'Standard (old)','curve-gentle':'Curve — Gentle','curve-medium':'Curve — Medium','curve-steep':'Curve — Steep'};
   const fbHeader=THEME.fbHeader||'🃏 TOURNAMENT PAYOUT STRUCTURE 🃏';
   const fbFooter=THEME.fbFooter||'Good luck at the tables! 🎰';
   const lines=[
     fbHeader,
     `Entries: ${ENTRIES}  |  Prize Pool: ${fmt(POOL)}`,
-    `Structure: ${mn[CURVE]||'Standard'}`,
+    `Structure: ${mn[PAYOUT_MODE]||'Standard'}`,
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
   ];
   displayRows.forEach((r,i)=>lines.push(`${r.label.padEnd(16)}${fmt(fbSnapOf(i))}`));
@@ -742,7 +911,13 @@ function applyTheme(theme){
   }
 }
 
-document.addEventListener('DOMContentLoaded',loadTheme);
+document.addEventListener('DOMContentLoaded',()=>{
+  loadTheme();
+  document.addEventListener('click',e=>{
+    if(!e.target.closest('#ptog-curve')&&!e.target.closest('#curve-menu'))
+      document.getElementById('curve-menu').style.display='none';
+  });
+});
 </script>
 </body>
 </html>
