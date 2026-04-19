@@ -174,7 +174,7 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
 
   <div class="slbl">Core</div>
   <div class="g3">
-    <div><label class="lbl">Total Entries</label><input type="number" id="f-entries" placeholder="e.g. 227" min="1"></div>
+    <div><label class="lbl">Total Entries</label><input type="number" id="f-entries" placeholder="e.g. 227" min="1" onchange="updateMaxSameDisplay()"></div>
     <div><label class="lbl">Prize Pool ($)</label><input type="number" id="f-pool" placeholder="e.g. 65725" min="1"></div>
     <div><label class="lbl">Min Cash ($)</label><input type="number" id="f-mincash" placeholder="e.g. 700" min="0"></div>
   </div>
@@ -211,6 +211,21 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
           <input type="number" id="f-cap23" value="1.30" min="1.01" max="3" step="0.01"
             onchange="updateRatioDisplay();if(ROWS.length)go()">
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-bottom:10px;">
+    <span id="maxsame-summary" onclick="toggleMaxSame()"
+      data-tip="Limits how many places can share the same prize. Auto-scales with entries: ≤180=3, 181–360=4, 361–540=5, and so on."
+      style="font-size:.72rem;color:var(--dim);cursor:pointer;user-select:none;">
+      Identical prizes: max <span id="maxsame-display">3</span> &nbsp;<span style="font-size:.65rem;">▾ adjust</span>
+    </span>
+    <div id="maxsame-fields" style="display:none;margin-top:8px;">
+      <div style="max-width:140px;">
+        <label class="lbl">Max same prize</label>
+        <input type="number" id="f-maxsame" value="3" min="1" max="50" step="1"
+          onchange="this.dataset.manual='1';updateMaxSameDisplay();if(ROWS.length)go()">
       </div>
     </div>
   </div>
@@ -315,6 +330,7 @@ let PT=[], PT_PCT=0;  // PT_PCT>0 → per-placing mode (ceil(entries×PT_PCT/100
 // ─────────────────────────────────────────────────────────
 let ROWS=[], POOL=0, MINCASH=0, ENTRIES=0, GFIRST=0, SNAP=0;
 let PAYOUT_MODE='standard';
+let MAX_SAME=3;
 let THEME={};
 
 // ─────────────────────────────────────────────────────────
@@ -340,26 +356,64 @@ function snapRound(n,to){
 // Rows with pinSnap=true were manually set by the user — skip enforcement for those.
 function snapDisplay(rows,to){
   if(!to) return rows.map(r=>r.prize);
-  // pinSnap rows were manually edited — use exact prize, skip snap AND enforcement
-  const s=rows.map(r=>r.pinSnap ? r.prize : Math.round(r.prize/to)*to);
-  // Strict gap enforcement: each gap must be strictly smaller than the gap above
-  // (by at least one snap unit). Repeat bottom-up passes until convergence because
-  // nudging one position can create a new equal-gap situation above it.
-  const preTot=rows.reduce((sum,r,i)=>sum+s[i]*r.count,0);
+  // pinSnap rows were manually edited — keep exact prize.
+  // Locked rows participate in snap rounding (their prizes are already multiples
+  // of snap since inc=SNAP during calculation, so this is typically a no-op).
+  const s=rows.map(r=>r.pinSnap ? r.prize : (r.locked ? Math.ceil(r.prize/to)*to : Math.round(r.prize/to)*to));
+  // Boundary gap: unlocked rows above locked groups must continue the
+  // accelerating gap pattern. Walk upward from the boundary, each gap
+  // must be at least one snap unit larger than the gap below it.
+  const fl=rows.findIndex(r=>r.locked);
+  if(fl>0){
+    const lockedGaps=[];
+    for(let i=fl;i<rows.length-1;i++){
+      if(rows[i].locked&&rows[i+1].locked) lockedGaps.push(s[i]-s[i+1]);
+    }
+    if(lockedGaps.length>0){
+      let reqGap=Math.max(...lockedGaps)+to;
+      for(let i=fl-1;i>=0;i--){
+        if(rows[i].pinSnap) break;
+        const curGap=s[i]-s[i+1];
+        if(curGap>=reqGap) break;
+        const needed=Math.ceil((reqGap-curGap)/to)*to;
+        s[i]+=needed;
+        reqGap+=to;
+      }
+    }
+  }
+  // Strict gap enforcement: each gap must be strictly smaller than the gap above.
+  // Skip locked rows — their stepped structure must be preserved.
   let changed;
   do {
     changed=false;
     for(let i=s.length-2;i>=1;i--){
-      if(rows[i].pinSnap) continue;
+      if(rows[i].pinSnap||rows[i].locked) continue;
       if(s[i]-s[i+1]>=s[i-1]-s[i] && s[i]>s[i+1]){ s[i]-=to; changed=true; }
     }
   } while(changed);
-  // Redistribute drift created by enforcement to the first unlocked place (1st is
-  // always safe — adding to the top prize never creates a gap inversion).
-  const drift=preTot-rows.reduce((sum,r,i)=>sum+s[i]*r.count,0);
-  if(drift!==0){
-    for(let i=0;i<s.length;i++){
-      if(!rows[i].pinSnap){ s[i]+=drift/rows[i].count; break; }
+  // Monotonicity: ensure no unlocked row ties or inverts with the row below it
+  // (can happen when ceil rounding pushes locked rows up to meet unlocked rows).
+  if(fl>0){
+    for(let i=fl-1;i>=0;i--){
+      if(rows[i].pinSnap) continue;
+      if(s[i]<=s[i+1]) s[i]=s[i+1]+to;
+    }
+  }
+  // Redistribute drift across unlocked rows (waterfall).  Each row absorbs as
+  // much as it can without dropping below the row below it + one snap unit.
+  // Any remainder cascades to the next unlocked row.
+  const snapTot=rows.reduce((sum,r,i)=>sum+s[i]*r.count,0);
+  let rem=POOL-snapTot;
+  if(rem!==0){
+    for(let i=0;i<s.length&&rem!==0;i++){
+      if(rows[i].pinSnap||rows[i].locked) continue;
+      const floor=i<s.length-1?s[i+1]+to:0;
+      if(rem<0){
+        const canAbsorb=(s[i]-floor)*rows[i].count;
+        if(canAbsorb<=0) continue;
+        if(Math.abs(rem)>canAbsorb){ rem+=canAbsorb; s[i]=floor; }
+        else { s[i]+=rem/rows[i].count; rem=0; }
+      } else { s[i]+=rem/rows[i].count; rem=0; }
     }
   }
   return s;
@@ -456,7 +510,7 @@ function scaleUnlocked(rows,pool){
   const lk=rows.filter(r=>r.locked).reduce((s,r)=>s+r.prize*r.count,0);
   const rem=pool-lk;
   const ft=rows.filter(r=>!r.locked).reduce((s,r)=>s+r.prize*r.count,0);
-  if(ft>0&&rem>0){const sc=rem/ft; rows.forEach(r=>{if(!r.locked)r.prize*=sc;});}
+  if(ft>0){const sc=Math.max(rem/ft,0); rows.forEach(r=>{if(!r.locked)r.prize*=sc;});}
 }
 
 // Grand totals using SNAP rounding (with gap-monotonicity enforcement)
@@ -480,7 +534,7 @@ function setRound(v,el){
   document.querySelectorAll('.rtog').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('custom-round-input').style.display='none';
-  if(ROWS.length) render(), renderFB(), updateStatus();
+  if(ROWS.length) go();
 }
 
 function toggleCustomRound(btn){
@@ -500,7 +554,25 @@ function applyCustomRound(inp){
   document.getElementById('rtog-custom').classList.add('active');
   document.getElementById('rtog-custom').textContent='$'+v;
   inp.style.display='none';
-  if(ROWS.length) render(), renderFB(), updateStatus();
+  if(ROWS.length) go();
+}
+
+function maxSameAuto(e){ return 3+Math.floor(Math.max(0,e-1)/180); }
+
+function toggleMaxSame(){
+  const f=document.getElementById('maxsame-fields');
+  const open=f.style.display!=='none';
+  f.style.display=open?'none':'block';
+  document.getElementById('maxsame-summary').querySelector('span:last-child').textContent=open?'▾ adjust':'▴ adjust';
+}
+
+function updateMaxSameDisplay(){
+  const entries=parseInt($('f-entries').value)||0;
+  const auto=maxSameAuto(entries);
+  const inp=document.getElementById('f-maxsame');
+  if(!inp.dataset.manual) inp.value=auto;
+  MAX_SAME=parseInt(inp.value)||auto;
+  document.getElementById('maxsame-display').textContent=MAX_SAME;
 }
 
 function toggleRatios(){
@@ -560,6 +632,8 @@ function go(){
   if(gtype==='pct'&&gval>0) gfirst=(gval/100)*pool;
 
   POOL=pool; MINCASH=mc; ENTRIES=entries; GFIRST=gfirst;
+  updateMaxSameDisplay();
+  const maxSame=MAX_SAME;
 
   let struct=getStruct(entries);
   if(op>0) struct=applyOverride(struct,op);
@@ -576,42 +650,120 @@ function go(){
     rows=buildExp(struct,pool,kMap[PAYOUT_MODE]||2.0);
   }
 
-  // Pass 1: lock bottom rows at min cash
+  // Pass 1: iterative min-cash lock.
+  // Lock any row below mc, rescale, repeat until stable.  A single break-on-first pass
+  // misses cases where a marginal unlocked row (barely above mc) falls below mc after
+  // the locked rows absorb their share of the pool.
   if(mc>0){
-    for(let i=rows.length-1;i>=0;i--){
-      if(rows[i].prize<mc){rows[i].prize=mc;rows[i].locked=true;}
-      else break;
+    let changed=true;
+    while(changed){
+      changed=false;
+      for(let i=rows.length-1;i>=0;i--){
+        if(!rows[i].locked&&rows[i].prize<mc){
+          rows[i].prize=mc;rows[i].locked=true;changed=true;
+        }
+      }
+      if(changed) scaleUnlocked(rows,pool);
     }
   }
 
-  // Pass 1b: merge adjacent locked rows at the same prize into one band
-  // (e.g. two separate min-cash groups both locked at $2,300 → one row)
-  rows=(()=>{
-    const merged=[]; let p=1;
+  // Pass 1b: max same prize stepping.
+  // Uses post-scale lowestUnlocked so the cap is accurate (pre-scale prices are too
+  // low and would collapse all stepped groups to mc).
+  if(mc>0){
+    const firstLocked=rows.findIndex(r=>r.locked);
+    if(firstLocked>=0){
+      const lockedCount=rows.slice(firstLocked).reduce((s,r)=>s+r.count,0);
+      const lowestUnlocked=firstLocked>0?rows[firstLocked-1].prize:Infinity;
+      const inc=SNAP>0?SNAP:5;
+      const numGroups=Math.ceil(lockedCount/maxSame);
+      const baseSize=Math.floor(lockedCount/numGroups);
+      const extraGroups=lockedCount%numGroups;
+
+      // Build groups bottom-up with accelerating gaps: each gap is inc larger
+      // than the previous.  gap(g) = g * inc  →  prize(g) = mc + g*(g+1)/2 * inc
+      // Cap at lowestUnlocked-inc; if capped, snap down to nearest inc multiple
+      // so the prize stays on-grid. Linear fallback (prev+inc) only when the
+      // snapped cap equals the previous group (prevents merging).
+      const cap=Math.floor((lowestUnlocked-inc)/inc)*inc;
+      const groups=[];
+      for(let g=0;g<numGroups;g++){
+        const chunkSize=g<extraGroups?baseSize+1:baseSize;
+        let prize;
+        if(g===0){ prize=mc; }
+        else {
+          prize=mc + g*(g+1)/2 * inc;
+          prize=Math.min(prize, cap);
+          if(groups[g-1].prize>=prize) prize=groups[g-1].prize+inc;
+          prize=Math.min(prize, cap);
+          prize=Math.max(prize,mc);
+        }
+        groups.push({count:chunkSize,prize});
+      }
+
+      // Reverse to top-first; merge adjacent groups that share the same prize
+      // (happens when cap is tight — honest to show they share a prize level).
+      groups.reverse();
+      const newLocked=[];
+      for(const grp of groups){
+        const last=newLocked[newLocked.length-1];
+        if(last&&last.prize===grp.prize) last.count+=grp.count;
+        else newLocked.push({label:'',count:grp.count,prize:grp.prize,locked:true});
+      }
+      rows=[...rows.slice(0,firstLocked),...newLocked];
+    }
+  }
+
+  // Pass 1c: label locked rows with ordinal ranges
+  (()=>{
+    let p=1;
     for(const r of rows){
-      const prev=merged[merged.length-1];
-      if(prev&&prev.locked&&r.locked&&Math.abs(prev.prize-r.prize)<0.01){
-        prev.count+=r.count;
-        prev._e=p+r.count-1;
-      } else {
-        merged.push({...r,_s:p,_e:p+r.count-1});
+      if(r.locked){
+        const s=p, e=p+r.count-1;
+        r.label=s===e?ordinal(s):`${ordinal(s)}-${ordinal(e)}`;
       }
       p+=r.count;
     }
-    merged.forEach(r=>{
-      if(r.locked) r.label=r._s===r._e?ordinal(r._s):`${ordinal(r._s)}-${ordinal(r._e)}`;
-      delete r._s; delete r._e;
-    });
-    return merged;
   })();
 
-  // Pass 2: scale unlocked to fill pool
+  // Pass 2b: re-scale after stepping (locked amounts have changed)
   scaleUnlocked(rows,pool);
+
+  // Pass 2c: inversion clamp — stepped prizes may exceed adjacent unlocked row after
+  // rescaling (the cap in Pass 1b uses pre-2b unlocked prices; the additional locked
+  // cost pushes unlocked rows below the cap).  Clamp top locked row and cascade
+  // downward so no locked row exceeds the one above it.
+  if(mc>0){
+    const fl=rows.findIndex(r=>r.locked);
+    if(fl>0&&rows[fl].prize>=rows[fl-1].prize){
+      const clampStep=SNAP>0?SNAP:50;
+      rows[fl].prize=Math.max(rows[fl-1].prize-clampStep,mc);
+      for(let i=fl+1;i<rows.length;i++){
+        if(rows[i].locked&&rows[i].prize>rows[i-1].prize) rows[i].prize=rows[i-1].prize;
+      }
+      scaleUnlocked(rows,pool);
+    }
+  }
 
   // Pass 3: guarantee first (checked AFTER scaling)
   if(gfirst>0&&rows[0].prize<gfirst){
     rows[0].prize=gfirst; rows[0].locked=true;
     scaleUnlocked(rows,pool);
+  }
+
+  // Pass 3b: iterative min cash re-check — guarantee rescaling can push unlocked rows
+  // below mc, and locking those can cascade further (same reason Pass 1 is iterative).
+  if(mc>0){
+    let changed3b=true;
+    while(changed3b){
+      changed3b=false;
+      for(let i=rows.length-1;i>=0;i--){
+        if(!rows[i].locked&&rows[i].prize<mc){
+          rows[i].prize=mc;rows[i].locked=true;changed3b=true;
+        }
+      }
+      if(changed3b) scaleUnlocked(rows,pool);
+    }
   }
 
   ROWS=rows;
@@ -655,17 +807,35 @@ function render(){
 
   const tot=grandTotal();
   const totp=displayPct();
-  const pOk=Math.abs(totp-100)<0.5;
+  const pOk=Math.abs(totp-100)<0.01;
   const exactPool=ROWS.reduce((s,r)=>s+r.prize*r.count,0);
   const roundedTotal=ROWS.reduce((s,r,i)=>s+snapVals[i]*r.count,0);
   const drift=roundedTotal-POOL;
   const driftOk=Math.abs(drift)<0.01;
+
+  // Pre-compute jumps (difference in per-player prize from row below)
+  const jumps=displayRows.map((r,i)=>{
+    if(i>=displayRows.length-1) return null;
+    const thisP=SNAP?snapOf(i):r.prize;
+    const nextP=SNAP?snapOf(i+1):displayRows[i+1].prize;
+    return thisP-nextP;
+  });
+  // Check each jump: unlocked gaps should decrease going down, locked gaps should increase going up
+  const jumpOk=jumps.map((j,i)=>{
+    if(j===null) return null;
+    if(j<-0.01) return false; // inversion — prize below is higher
+    if(i>=jumps.length-1||jumps[i+1]===null) return true; // bottom-most gap, nothing to compare
+    const nextJ=jumps[i+1];
+    if(nextJ===null) return true;
+    return j>nextJ-0.01; // this gap should be >= gap below (strictly for unlocked, or equal OK at boundary)
+  });
 
   let h=`<table><thead><tr>
     <th>Position</th>
     <th class="r">% each</th>
     <th class="r">Prize each</th>
     <th class="r">Row total</th>
+    <th class="r">Jump</th>
   </tr></thead><tbody>`;
 
   displayRows.forEach((r,i)=>{
@@ -695,6 +865,7 @@ function render(){
       <td class="r"><input class="w75" type="number" step="0.001" value="${pEach}" onchange="${onchgPct}"></td>
       <td class="r"><input class="w100" type="number" step="${isPinned?1:(SNAP||1)}" value="${dispPrize%1?dispPrize.toFixed(2):dispPrize.toFixed(0)}" onchange="${onchgPrize}">${low}</td>
       <td class="r rt">${fmt(dispPrize*r.count)}${r.count>1?`<br><span style="font-size:.65rem;color:var(--dim);">×${r.count}</span>`:''}</td>
+      <td class="r" style="font-size:.75rem;color:var(--dim);">${jumps[i]===null?'—':`${fmt(jumps[i])} ${jumpOk[i]?'<span style="color:var(--green3);">✓</span>':'<span style="color:var(--red);">✗</span>'}`}</td>
     </tr>`;
   });
 
@@ -702,14 +873,11 @@ function render(){
   h+=`</tbody><tfoot><tr>
     <td style="color:var(--dim);font-size:.75rem;">TOTALS</td>
     <td class="r" style="color:${pOk?'var(--green3)':'var(--red)'};">${totp.toFixed(2)}%</td>
-    <td class="r" style="font-size:.72rem;color:${pOk?'var(--green3)':'var(--red)'};">${pOk?'✓ 100%':'⚠ ≠ 100%'}</td>
-    <td class="r" style="color:${mOk?'var(--green3)':'var(--amber)'};">${fmt(tot)}</td>
+    <td class="r" style="color:${pOk?'var(--green3)':'var(--red)'};">${pOk?'✓ 100%':'⚠ ≠ 100%'}</td>
+    <td class="r" style="color:${mOk?'var(--green3)':'var(--amber)'};">${fmt(tot)} ${mOk?'✓':'⚠'}</td>
+    <td></td>
   </tr></tfoot></table>`;
 
-  if(SNAP&&!driftOk){
-    const sign=drift>0?'+':'';
-    h+=`<div class="rdiff">⚠ Rounding drift: ${sign}${fmt(drift)} vs pool of ${fmt(POOL)} — adjust manually if needed</div>`;
-  }
 
   $('tbl-inner').innerHTML=h;
 }
@@ -766,14 +934,14 @@ function updateStatus(){
   const places=ROWS.reduce((s,r)=>s+r.count,0);
   const totp=displayPct();
   const tot=grandTotal();
-  const pOk=Math.abs(totp-100)<0.5;
+  const pOk=Math.abs(totp-100)<0.01;
   const mOk=Math.abs(tot-POOL)<1;
 
   $('s-places').textContent=places;
   $('s-field').textContent=ENTRIES>0?(places/ENTRIES*100).toFixed(1)+'%':'—';
-  $('s-pct').textContent=totp.toFixed(2)+'%';
+  $('s-pct').textContent=(pOk?'✓ ':'⚠ ')+totp.toFixed(2)+'%';
   $('s-pct').className='sv '+(pOk?'ok':'bad');
-  $('s-prize').textContent=fmt(tot);
+  $('s-prize').textContent=(mOk?'✓ ':'⚠ ')+fmt(tot);
   $('s-prize').className='sv '+(mOk?'ok':'warn');
 
   const last=ROWS[ROWS.length-1];
@@ -808,8 +976,9 @@ function updateStatus(){
     const sv=snapDisplay(ROWS,SNAP);
     const drift=ROWS.reduce((s,r,i)=>s+sv[i]*r.count,0)-POOL;
     $('s-round-wrap').style.display='flex';
+    const dOk=Math.abs(drift)<0.01;
     const sign=drift>=0?'+':'';
-    $('s-round').textContent=sign+fmt(drift);
+    $('s-round').textContent=(dOk?'✓ ':'⚠ ')+sign+fmt(drift);
     $('s-round').className='sv '+(Math.abs(drift)<0.01?'ok':'warn');
   } else {
     $('s-round-wrap').style.display='none';
@@ -895,6 +1064,19 @@ function applyTheme(theme){
   if(theme.name){
     $('hdr-title').textContent=theme.name;
     document.title=theme.name+' — Payout Calculator';
+  }
+
+  // Example placeholders + default snap
+  if(theme.examples){
+    const ex=theme.examples;
+    if(ex.entries)  $('f-entries').placeholder='e.g. '+ex.entries;
+    if(ex.pool)     $('f-pool').placeholder='e.g. '+ex.pool;
+    if(ex.minCash)  $('f-mincash').placeholder='e.g. '+ex.minCash;
+    if(ex.snap!=null){
+      const btn=document.querySelector('.rtog[data-v="'+ex.snap+'"]');
+      if(btn) setRound(ex.snap,btn);
+      else { SNAP=ex.snap; document.querySelectorAll('.rtog').forEach(b=>b.classList.remove('active')); const cb=document.getElementById('rtog-custom'); cb.classList.add('active'); cb.textContent='$'+ex.snap; }
+    }
   }
 
   // Custom payout table — two formats:

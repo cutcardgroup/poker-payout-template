@@ -6,7 +6,7 @@
 #
 # Usage:
 #   ./scripts/export-public.sh <public-repo-url>
-#   ./scripts/export-public.sh git@github.com:yourname/poker-payout-template.git
+#   ./scripts/export-public.sh https://github.com/cutcardgroup/poker-payout-template.git
 #
 # The public repo must already exist on GitHub (can be empty).
 
@@ -138,7 +138,10 @@ poker-payout/
 │   └── example.json    # Example theme stub — copy and rename
 ├── logos/              # Operator logos (PNG preferred; SVG placeholder included)
 ├── scripts/
-│   └── export-public.sh
+│   ├── export-public.sh
+│   ├── test-payouts.js     # Payout calculation tests
+│   ├── test-random.js      # Random scenario stress test
+│   └── show-payout.js      # CLI tool — display payout table
 └── package.json
 ```
 
@@ -287,6 +290,8 @@ touch "$PUBLIC_DIR/logos/.gitkeep"
 mkdir -p "$PUBLIC_DIR/scripts"
 cp "$PRIVATE_DIR/scripts/export-public.sh" "$PUBLIC_DIR/scripts/export-public.sh"
 cp "$PRIVATE_DIR/scripts/test-payouts.js"  "$PUBLIC_DIR/scripts/test-payouts.js"
+cp "$PRIVATE_DIR/scripts/show-payout.js"  "$PUBLIC_DIR/scripts/show-payout.js"
+cp "$PRIVATE_DIR/scripts/test-random.js" "$PUBLIC_DIR/scripts/test-random.js"
 chmod +x "$PUBLIC_DIR/scripts/export-public.sh"
 
 # ── Commit and push ─────────────────────────────────────────────────────────

@@ -15,7 +15,10 @@ poker-payout/
 │   └── example.json    # Example theme stub — copy and rename
 ├── logos/              # Operator logos (PNG preferred; SVG placeholder included)
 ├── scripts/
-│   └── export-public.sh
+│   ├── export-public.sh
+│   ├── test-payouts.js     # Payout calculation tests
+│   ├── test-random.js      # Random scenario stress test
+│   └── show-payout.js      # CLI tool — display payout table
 └── package.json
 ```
 

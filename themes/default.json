@@ -17,6 +17,11 @@
     "dim":    "#8a9b80",
     "border": "#2a4030"
   },
+  "examples": {
+    "entries": 336,
+    "pool": 55000,
+    "minCash": 1150
+  },
   "payoutTable": [
     { "min":    1, "max":    9, "rows": [["1st",80,1],["2nd",20,1]] },
     { "min":   10, "max":   30, "rows": [["1st",50,1],["2nd",30,1],["3rd",20,1]] },

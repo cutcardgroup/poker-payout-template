@@ -22,7 +22,7 @@ function scaleUnlocked(rows, pool) {
   const lk = rows.filter(r => r.locked).reduce((s, r) => s + r.prize * r.count, 0);
   const rem = pool - lk;
   const ft = rows.filter(r => !r.locked).reduce((s, r) => s + r.prize * r.count, 0);
-  if (ft > 0 && rem > 0) { const sc = rem / ft; rows.forEach(r => { if (!r.locked) r.prize *= sc; }); }
+  if (ft > 0) { const sc = Math.max(rem / ft, 0); rows.forEach(r => { if (!r.locked) r.prize *= sc; }); }
 }
 
 function calculate({ entries, pool, minCash = 0, guaranteedFirst = 0 }) {
@@ -30,11 +30,17 @@ function calculate({ entries, pool, minCash = 0, guaranteedFirst = 0 }) {
 
   let rows = struct.map(r => ({ label: r.label, count: r.count, prize: (r.pct / 100) * pool, locked: false }));
 
-  // Pass 1: lock bottom rows at min cash
+  // Pass 1: iterative min-cash lock
   if (minCash > 0) {
-    for (let i = rows.length - 1; i >= 0; i--) {
-      if (rows[i].prize < minCash) { rows[i].prize = minCash; rows[i].locked = true; }
-      else break;
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = rows.length - 1; i >= 0; i--) {
+        if (!rows[i].locked && rows[i].prize < minCash) {
+          rows[i].prize = minCash; rows[i].locked = true; changed = true;
+        }
+      }
+      if (changed) scaleUnlocked(rows, pool);
     }
   }
 
@@ -320,22 +326,59 @@ testSplit('Test 20 — edit last place in group (30th within 21st-30th): splits 
 });
 
 // ── snapDisplay (mirrors index.html exactly) ─────────────────────────────────
-function snapDisplay(rows, to) {
+function snapDisplay(rows, to, pool) {
   if (!to) return rows.map(r => r.prize);
-  const s = rows.map(r => r.pinSnap ? r.prize : Math.round(r.prize / to) * to);
-  const preTot = rows.reduce((sum, r, i) => sum + s[i] * r.count, 0);
+  const s = rows.map(r => r.pinSnap ? r.prize : (r.locked ? Math.ceil(r.prize / to) * to : Math.round(r.prize / to) * to));
+  // Boundary gap: unlocked rows above locked groups must continue the
+  // accelerating gap pattern upward until natural gaps are large enough.
+  const fl = rows.findIndex(r => r.locked);
+  if (fl > 0) {
+    const lockedGaps = [];
+    for (let i = fl; i < rows.length - 1; i++) {
+      if (rows[i].locked && rows[i + 1].locked) lockedGaps.push(s[i] - s[i + 1]);
+    }
+    if (lockedGaps.length > 0) {
+      let reqGap = Math.max(...lockedGaps) + to;
+      for (let i = fl - 1; i >= 0; i--) {
+        if (rows[i].pinSnap) break;
+        const curGap = s[i] - s[i + 1];
+        if (curGap >= reqGap) break;
+        const needed = Math.ceil((reqGap - curGap) / to) * to;
+        s[i] += needed;
+        reqGap += to;
+      }
+    }
+  }
+  // Strict gap enforcement
   let changed;
   do {
     changed = false;
     for (let i = s.length - 2; i >= 1; i--) {
-      if (rows[i].pinSnap) continue;
+      if (rows[i].pinSnap || rows[i].locked) continue;
       if (s[i] - s[i+1] >= s[i-1] - s[i] && s[i] > s[i+1]) { s[i] -= to; changed = true; }
     }
   } while (changed);
-  const drift = preTot - rows.reduce((sum, r, i) => sum + s[i] * r.count, 0);
-  if (drift !== 0) {
-    for (let i = 0; i < s.length; i++) {
-      if (!rows[i].pinSnap) { s[i] += drift / rows[i].count; break; }
+  // Monotonicity: ensure no unlocked row ties or inverts with the row below
+  if (fl > 0) {
+    for (let i = fl - 1; i >= 0; i--) {
+      if (rows[i].pinSnap) continue;
+      if (s[i] <= s[i + 1]) s[i] = s[i + 1] + to;
+    }
+  }
+  // Drift target: use pool if provided, otherwise raw total (synthetic tests)
+  const target = pool !== undefined ? pool : rows.reduce((sum, r) => sum + r.prize * r.count, 0);
+  const snapTot = rows.reduce((sum, r, i) => sum + s[i] * r.count, 0);
+  let rem = target - snapTot;
+  if (rem !== 0) {
+    for (let i = 0; i < s.length && rem !== 0; i++) {
+      if (rows[i].pinSnap || rows[i].locked) continue;
+      const floor = i < s.length - 1 ? s[i + 1] + to : 0;
+      if (rem < 0) {
+        const canAbsorb = (s[i] - floor) * rows[i].count;
+        if (canAbsorb <= 0) continue;
+        if (Math.abs(rem) > canAbsorb) { rem += canAbsorb; s[i] = floor; }
+        else { s[i] += rem / rows[i].count; rem = 0; }
+      } else { s[i] += rem / rows[i].count; rem = 0; }
     }
   }
   return s;
@@ -358,9 +401,9 @@ function testSnap(name, fn) {
 //   Raw:    1st $1,000 / 2nd $625 / 3rd $475 / 4th $250
 //   Snapped: 1st $1,000 / 2nd $650 / 3rd $500 / 4th $250
 //   Gaps:   $350 / $150 / $250  ← 3rd→4th gap ($250) > 2nd→3rd gap ($150) = INVERSION
-//   Fix:    nudge 3rd down $50 → $450; drift $50 added to last → 4th = $300
-//   Final:  $1,000 / $650 / $450 / $300   gaps: $350 / $200 / $150 ✓
-testSnap('Test 21 — snap gap inversion: nudge-down corrects inversion, drift goes to last place', errors => {
+//   Fix:    nudge 3rd down $50 → $400; drift $50 to 1st → $1,050
+//   Final:  $1,050 / $650 / $400 / $250   gaps: $400 / $250 / $150 ✓
+testSnap('Test 21 — snap gap inversion: nudge-down corrects inversion, drift to 1st', errors => {
   const rows = [
     { prize: 1000, count: 1, pinSnap: false },
     { prize:  625, count: 1, pinSnap: false },
@@ -371,7 +414,7 @@ testSnap('Test 21 — snap gap inversion: nudge-down corrects inversion, drift g
   const rawTotal = rows.reduce((sum, r) => sum + r.prize * r.count, 0);  // 2350
   const snapTotal = s.reduce((sum, v) => sum + v, 0);
 
-  assert(errors, Math.abs(s[0] - 1100) < 0.01, `1st should receive drift → $1,100; got $${s[0]}`);
+  assert(errors, Math.abs(s[0] - 1050) < 0.01, `1st should receive drift → $1,050; got $${s[0]}`);
   assert(errors, Math.abs(s[1] -  650) < 0.01, `2nd should be $650; got $${s[1]}`);
   assert(errors, Math.abs(s[2] -  400) < 0.01, `3rd should be nudged to $400; got $${s[2]}`);
   assert(errors, Math.abs(s[3] -  250) < 0.01, `4th should be unchanged at $250; got $${s[3]}`);
@@ -383,11 +426,9 @@ testSnap('Test 21 — snap gap inversion: nudge-down corrects inversion, drift g
     assert(errors, gapBelow < gapAbove, `Equal/inverted gap at position ${i+1}: gap below ($${gapBelow}) >= gap above ($${gapAbove})`);
   }
 
-  // snap total preserved
-  assert(errors, Math.abs(snapTotal - (rawTotal + (s.reduce((a,v)=>a+v,0) - snapTotal))) < 0.01 || true,
-    'structural check only — drift redistributed so snap total should equal pre-enforcement snap total');
-  const preSnap = rows.map(r => Math.round(r.prize / 50) * 50).reduce((a,v)=>a+v,0); // 2400
-  assert(errors, Math.abs(snapTotal - preSnap) < 0.01, `Snap total should equal pre-enforcement snap total $${preSnap}; got $${snapTotal}`);
+  // snap total preserved (equals raw total — pool target)
+  const rawTot = rows.reduce((a,r)=>a+r.prize*r.count,0);
+  assert(errors, Math.abs(snapTotal - rawTot) < 0.01, `Snap total should equal raw total $${rawTot}; got $${snapTotal}`);
 });
 
 testSnap('Test 22 — pinSnap row skips enforcement: manually pinned prize is never nudged', errors => {
@@ -404,7 +445,7 @@ testSnap('Test 22 — pinSnap row skips enforcement: manually pinned prize is ne
 
 // $100 snap — engineered inversion: 3rd rounds up to $2,400, creating gap 3rd→4th ($900)
 // larger than gap 2nd→3rd ($700). Enforcement nudges 3rd down twice to $2,200.
-// $200 drift redistributed to 1st → $5,200. Gaps: $2,100 / $900 / $700 / $600 ✓
+// $100 drift redistributed to 1st → $5,100. Gaps: $2,000 / $900 / $700 / $600 ✓
 testSnap('Test 23 — $100 snap: inversion corrected, drift to 1st, gaps strictly decreasing', errors => {
   const rows = [
     { prize: 5000, count: 1, pinSnap: false },
@@ -415,9 +456,9 @@ testSnap('Test 23 — $100 snap: inversion corrected, drift to 1st, gaps strictl
   ];
   const s = snapDisplay(rows, 100);
 
-  assert(errors, Math.abs(s[0] - 5200) < 0.01, `1st should receive drift → $5,200; got $${s[0]}`);
+  assert(errors, Math.abs(s[0] - 5100) < 0.01, `1st should receive drift → $5,100; got $${s[0]}`);
   assert(errors, Math.abs(s[1] - 3100) < 0.01, `2nd should be $3,100; got $${s[1]}`);
-  assert(errors, Math.abs(s[2] - 2200) < 0.01, `3rd should be nudged to $2,200; got $${s[2]}`);
+  assert(errors, Math.abs(s[2] - 2200) < 0.01, `3rd should be $2,200; got $${s[2]}`);
   assert(errors, Math.abs(s[3] - 1500) < 0.01, `4th should be $1,500; got $${s[3]}`);
   assert(errors, Math.abs(s[4] -  900) < 0.01, `5th should be $900; got $${s[4]}`);
 
@@ -425,13 +466,13 @@ testSnap('Test 23 — $100 snap: inversion corrected, drift to 1st, gaps strictl
     const gapAbove = s[i-1] - s[i], gapBelow = s[i] - s[i+1];
     assert(errors, gapBelow < gapAbove, `Equal/inverted gap at position ${i+1}: below=$${gapBelow} above=$${gapAbove}`);
   }
-  const preSnap = rows.map(r => Math.round(r.prize / 100) * 100).reduce((a, v) => a + v, 0);
-  assert(errors, Math.abs(s.reduce((a,v)=>a+v,0) - preSnap) < 0.01, `Snap total should equal pre-enforcement snap total $${preSnap}`);
+  const rawTot = rows.reduce((a,r)=>a+r.prize*r.count,0);
+  assert(errors, Math.abs(s.reduce((a,v)=>a+v,0) - rawTot) < 0.01, `Snap total should equal raw total $${rawTot}`);
 });
 
 // $66 snap (custom unit) — engineered inversion: 3rd rounds to $1,320, creating gap
-// 3rd→4th ($528) larger than gap 2nd→3rd ($462). Nudged to $1,254. $66 drift to 1st.
-// Gaps: $1,254 / $528 / $462 ✓  (also verifies non-standard snap units work correctly)
+// 3rd→4th ($528) larger than gap 2nd→3rd ($462). Nudged to $1,254. $152 drift to 1st.
+// Gaps: $1,340 / $528 / $462 ✓  (also verifies non-standard snap units work correctly)
 testSnap('Test 24 — $66 custom snap: non-standard unit enforces strict gaps, drift to 1st', errors => {
   const rows = [
     { prize: 3000, count: 1, pinSnap: false },
@@ -441,7 +482,7 @@ testSnap('Test 24 — $66 custom snap: non-standard unit enforces strict gaps, d
   ];
   const s = snapDisplay(rows, 66);
 
-  assert(errors, Math.abs(s[0] - 3036) < 0.01, `1st should receive drift → $3,036; got $${s[0]}`);
+  assert(errors, Math.abs(s[0] - 3122) < 0.01, `1st should receive drift → $3,122; got $${s[0]}`);
   assert(errors, Math.abs(s[1] - 1782) < 0.01, `2nd should be $1,782; got $${s[1]}`);
   assert(errors, Math.abs(s[2] - 1254) < 0.01, `3rd should be nudged to $1,254; got $${s[2]}`);
   assert(errors, Math.abs(s[3] -  792) < 0.01, `4th should be $792; got $${s[3]}`);
@@ -450,8 +491,8 @@ testSnap('Test 24 — $66 custom snap: non-standard unit enforces strict gaps, d
     const gapAbove = s[i-1] - s[i], gapBelow = s[i] - s[i+1];
     assert(errors, gapBelow < gapAbove, `Equal/inverted gap at position ${i+1}: below=$${gapBelow} above=$${gapAbove}`);
   }
-  const preSnap = rows.map(r => Math.round(r.prize / 66) * 66).reduce((a, v) => a + v, 0);
-  assert(errors, Math.abs(s.reduce((a,v)=>a+v,0) - preSnap) < 0.01, `Snap total should equal pre-enforcement snap total $${preSnap}`);
+  const rawTot = rows.reduce((a,r)=>a+r.prize*r.count,0);
+  assert(errors, Math.abs(s.reduce((a,v)=>a+v,0) - rawTot) < 0.01, `Snap total should equal raw total $${rawTot}`);
 });
 
 // ── Category E: Standard structure ─────────────────────────────────────
@@ -482,10 +523,17 @@ function calculateNew({ entries, pool, minCash = 0, guaranteedFirst = 0 }) {
   const struct = getStruct(entries);
   let rows = buildStandardNew(struct, pool);
 
+  // Pass 1: iterative min-cash lock
   if (minCash > 0) {
-    for (let i = rows.length - 1; i >= 0; i--) {
-      if (rows[i].prize < minCash) { rows[i].prize = minCash; rows[i].locked = true; }
-      else break;
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = rows.length - 1; i >= 0; i--) {
+        if (!rows[i].locked && rows[i].prize < minCash) {
+          rows[i].prize = minCash; rows[i].locked = true; changed = true;
+        }
+      }
+      if (changed) scaleUnlocked(rows, pool);
     }
   }
   scaleUnlocked(rows, pool);
@@ -561,6 +609,276 @@ testNew('Test 28 — Standard + min-cash: pool conserved after locking', errors 
   assert(errors, Math.abs(total - 20000) < 0.01, `Total should be $20,000; got ${fmt(total)}`);
   assert(errors, places === 10, `Places should be 10; got ${places}`);
 });
+
+// ── Category F: Max same prize / identical prizes limit ───────────────────────
+// Mirrors maxSameAuto(), Pass 1b (max same expansion + stepped gaps),
+// and Pass 3b (second min cash check after guarantee) from index.html.
+
+function maxSameAuto(e) { return 3 + Math.floor(Math.max(0, e - 1) / 180); }
+
+function calculateWithMaxSame({ entries, pool, minCash = 0, guaranteedFirst = 0, maxSame = null, snap = 50 }) {
+  const struct = getStruct(entries);
+  const ms = maxSame !== null ? maxSame : maxSameAuto(entries);
+
+  let rows = buildStandardNew(struct, pool);
+
+  // Pass 1: iterative min-cash lock — repeat until no unlocked row falls below mc
+  if (minCash > 0) {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = rows.length - 1; i >= 0; i--) {
+        if (!rows[i].locked && rows[i].prize < minCash) {
+          rows[i].prize = minCash; rows[i].locked = true; changed = true;
+        }
+      }
+      if (changed) scaleUnlocked(rows, pool);
+    }
+  }
+
+  // Pass 1b: max same prize stepping (uses post-scale lowestUnlocked for accurate cap)
+  if (minCash > 0) {
+    const firstLocked = rows.findIndex(r => r.locked);
+    if (firstLocked >= 0) {
+      const lockedCount = rows.slice(firstLocked).reduce((s, r) => s + r.count, 0);
+      const lowestUnlocked = firstLocked > 0 ? rows[firstLocked - 1].prize : Infinity;
+      const inc = snap > 0 ? snap : 5;
+      const numGroups = Math.ceil(lockedCount / ms);
+      const baseSize = Math.floor(lockedCount / numGroups);
+      const extraGroups = lockedCount % numGroups;
+
+      const cap = Math.floor((lowestUnlocked - inc) / inc) * inc;
+      const groups = [];
+      for (let g = 0; g < numGroups; g++) {
+        const chunkSize = g < extraGroups ? baseSize + 1 : baseSize;
+        let prize;
+        if (g === 0) { prize = minCash; }
+        else {
+          prize = minCash + g * (g + 1) / 2 * inc;
+          prize = Math.min(prize, cap);
+          if (groups[g - 1].prize >= prize) prize = groups[g - 1].prize + inc;
+          prize = Math.min(prize, cap);
+          prize = Math.max(prize, minCash);
+        }
+        groups.push({ count: chunkSize, prize });
+      }
+
+      groups.reverse();
+      const newLocked = [];
+      for (const grp of groups) {
+        const last = newLocked[newLocked.length - 1];
+        if (last && last.prize === grp.prize) last.count += grp.count;
+        else newLocked.push({ label: '', count: grp.count, prize: grp.prize, locked: true });
+      }
+      rows = [...rows.slice(0, firstLocked), ...newLocked];
+    }
+  }
+
+  // Pass 2b: re-scale after stepping
+  scaleUnlocked(rows, pool);
+
+  // Pass 2c: inversion clamp — top locked group must not exceed adjacent unlocked row.
+  // Cascade downward so no locked row exceeds the one above it.
+  if (minCash > 0) {
+    const fl = rows.findIndex(r => r.locked);
+    if (fl > 0 && rows[fl].prize >= rows[fl - 1].prize) {
+      const clampStep = snap > 0 ? snap : 50;
+      rows[fl].prize = Math.max(rows[fl - 1].prize - clampStep, minCash);
+      for (let i = fl + 1; i < rows.length; i++) {
+        if (rows[i].locked && rows[i].prize > rows[i - 1].prize) rows[i].prize = rows[i - 1].prize;
+      }
+      scaleUnlocked(rows, pool);
+    }
+  }
+
+  // Pass 3: guaranteed first
+  if (guaranteedFirst > 0 && rows[0].prize < guaranteedFirst) {
+    rows[0].prize = guaranteedFirst; rows[0].locked = true;
+    scaleUnlocked(rows, pool);
+  }
+
+  // Pass 3b: iterative min cash re-check after guarantee rescaling
+  if (minCash > 0) {
+    let changed3b = true;
+    while (changed3b) {
+      changed3b = false;
+      for (let i = rows.length - 1; i >= 0; i--) {
+        if (!rows[i].locked && rows[i].prize < minCash) {
+          rows[i].prize = minCash; rows[i].locked = true; changed3b = true;
+        }
+      }
+      if (changed3b) scaleUnlocked(rows, pool);
+    }
+  }
+
+  const places = rows.reduce((s, r) => s + r.count, 0);
+  const total  = rows.reduce((s, r) => s + r.prize * r.count, 0);
+  return { rows, places, total, firstPrize: rows[0].prize };
+}
+
+function testMaxSame(name, fn) {
+  const errors = [];
+  try { fn(errors); } catch(e) { errors.push(`Threw: ${e.message}`); }
+  const ok = errors.length === 0;
+  console.log(`\n${ok?'✓':'✗'} ${name}`);
+  errors.forEach(e => console.log(`  ✗ ${e}`));
+  if (ok) { passed++; console.log('  ✓ all assertions passed'); }
+  else failed++;
+}
+
+testMaxSame('Test 29 — maxSameAuto: correct thresholds at boundary entries', errors => {
+  const cases = [
+    [1,   3], [180, 3],
+    [181, 4], [360, 4],
+    [361, 5], [540, 5],
+    [541, 6],
+  ];
+  cases.forEach(([e, expected]) => {
+    const got = maxSameAuto(e);
+    assert(errors, got === expected, `entries=${e}: expected ${expected}, got ${got}`);
+  });
+});
+
+testMaxSame('Test 30 — max same basic: no locked (min-cash) prize shared by more than maxSame players', errors => {
+  // 154 entries, Standard mode, minCash=$2,000, gFirst=$33,000, maxSame=3
+  const { rows } = calculateWithMaxSame({ entries: 154, pool: 148610, minCash: 2000, guaranteedFirst: 33000, maxSame: 3, snap: 50 });
+
+  // Count players at each locked prize value — maxSame only constrains min-cash locked rows
+  const lockedPrizeMap = new Map();
+  rows.filter(r => r.locked && r.prize <= 2000 * 3).forEach(r =>
+    lockedPrizeMap.set(r.prize, (lockedPrizeMap.get(r.prize) || 0) + r.count)
+  );
+
+  lockedPrizeMap.forEach((count, prize) => {
+    assert(errors, count <= 3, `Locked prize $${prize} shared by ${count} players — exceeds maxSame=3`);
+  });
+
+  // Verify at least one locked group exists (test is meaningful)
+  assert(errors, lockedPrizeMap.size > 0, 'Expected at least one locked prize group');
+});
+
+testMaxSame('Test 31 — stepped gaps: locked group gaps grow going up', errors => {
+  // 227 entries, $65,725 pool, $700 min cash, maxSame=3, snap=0
+  // The 201-300 bracket has 30 places; with Standard curve many bottom rows fall below
+  // $700, producing enough locked places to create 3+ groups of 3.
+  const snap = 0;
+  const ms = 3;
+  const { rows } = calculateWithMaxSame({ entries: 227, pool: 65725, minCash: 700, guaranteedFirst: 0, maxSame: ms, snap });
+
+  const lockedRows = rows.filter(r => r.locked);
+  assert(errors, lockedRows.length >= 3,
+    `Expected at least 3 locked groups; got ${lockedRows.length}`);
+  if (lockedRows.length < 2) return;
+
+  // Collect locked group prizes bottom-first
+  const lockedPrizes = lockedRows.map(r => r.prize).reverse();
+
+  // Gaps between consecutive locked groups (bottom-up)
+  const gaps = [];
+  for (let i = 1; i < lockedPrizes.length; i++) {
+    gaps.push(lockedPrizes[i] - lockedPrizes[i - 1]);
+  }
+
+  // All gaps must be positive (prizes strictly increasing going up)
+  gaps.forEach((g, i) => assert(errors, g > 0, `Gap ${i + 1} is not positive: $${g}`));
+
+  // Each gap must be larger than the one below (accelerating gaps).
+  // Top gap may be smaller due to lowestUnlocked cap — only check interior.
+  for (let i = 1; i < gaps.length - 1; i++) {
+    assert(errors, gaps[i] > gaps[i - 1] - 0.01,
+      `Gap ${i + 1} ($${gaps[i].toFixed(2)}) should be larger than gap ${i} ($${gaps[i - 1].toFixed(2)})`);
+  }
+
+  // No locked group exceeds maxSame players
+  lockedRows.forEach(r => {
+    assert(errors, r.count <= ms,
+      `Locked group has ${r.count} players — exceeds maxSame=${ms}`);
+  });
+});
+
+testMaxSame('Test 32 — second min cash pass: guarantee rescaling never leaves a place below min cash', errors => {
+  // 60 entries, $58,000 pool — guarantee ($33,000) is 57% of pool, rescaling pushes bottom places low
+  const { rows } = calculateWithMaxSame({ entries: 60, pool: 58000, minCash: 2000, guaranteedFirst: 33000, maxSame: 3, snap: 50 });
+
+  rows.forEach(r => {
+    assert(errors, r.prize >= 2000 - 0.01,
+      `${r.label || '(locked)'} prize $${r.prize.toFixed(2)} is below min cash $2,000`);
+  });
+});
+
+testMaxSame('Test 33 — cap at lowest unlocked: top locked group never exceeds the unlocked row above it', errors => {
+  const { rows } = calculateWithMaxSame({ entries: 154, pool: 148610, minCash: 2000, guaranteedFirst: 33000, maxSame: 3, snap: 50 });
+
+  const firstLockedIdx = rows.findIndex(r => r.locked);
+  if (firstLockedIdx <= 0) return; // no unlocked rows above — skip
+
+  const lowestUnlocked = rows[firstLockedIdx - 1].prize;
+  const highestLocked  = rows[firstLockedIdx].prize;
+
+  assert(errors, highestLocked < lowestUnlocked,
+    `Top locked group ($${highestLocked}) should be below lowest unlocked row ($${lowestUnlocked.toFixed(2)})`);
+});
+
+testMaxSame('Test 34 — snap display: 1st place stays round, no cents in any row', errors => {
+  // With snap active, all displayed values should be clean (no fractional cents).
+  // Locked rows participate in snap rounding (they're already multiples of inc=snap).
+  // Drift from enforcement goes to 1st place as a whole snap multiple.
+  const pool = 166240;
+  const snap = 25;
+  const { rows } = calculateWithMaxSame({ entries: 336, pool, minCash: 1150, guaranteedFirst: 0, maxSame: 4, snap });
+
+  const sv = snapDisplay(rows, snap, pool);
+
+  // No row should show fractional cents
+  sv.forEach((v, i) => {
+    assert(errors, Math.abs(v - Math.round(v)) < 0.01,
+      `Row ${i} prize $${v.toFixed(4)} has fractional cents`);
+  });
+
+  // 1st place should be a round number (no cents from drift)
+  assert(errors, Math.abs(sv[0] % 1) < 0.01,
+    `1st place $${sv[0].toFixed(2)} should be a whole dollar amount`);
+});
+
+testMaxSame('Test 35 — tight ceiling: triangle fallback to linear prevents group merging', errors => {
+  // SPT-like scenario: 336 entries, $166,240 pool, $1,150 min cash, $25 snap.
+  // Many locked rows with a low lowestUnlocked creates a tight ceiling.
+  // Triangle formula overshoots the cap at g=3, so groups must fall back to
+  // linear spacing (prev+inc). Without the fix, groups merge and exceed maxSame.
+  const { rows } = calculateWithMaxSame({ entries: 336, pool: 166240, minCash: 1150, guaranteedFirst: 0, maxSame: 4, snap: 25 });
+
+  const lockedRows = rows.filter(r => r.locked);
+
+  // Every locked group must respect maxSame
+  lockedRows.forEach(r => {
+    assert(errors, r.count <= 4,
+      `Locked group at $${r.prize.toFixed(0)} has ${r.count} players — exceeds maxSame=4`);
+  });
+
+  // All locked groups must have distinct prizes (no merging)
+  const prizes = lockedRows.map(r => r.prize);
+  const unique = new Set(prizes);
+  assert(errors, unique.size === prizes.length,
+    `Expected ${prizes.length} distinct locked prizes, got ${unique.size} — groups merged`);
+
+  // All gaps between locked groups must be positive
+  for (let i = 0; i < lockedRows.length - 1; i++) {
+    const gap = lockedRows[i].prize - lockedRows[i + 1].prize;
+    assert(errors, gap > 0,
+      `Gap between locked rows ${i} and ${i+1} is $${gap.toFixed(0)} — not positive`);
+  }
+});
+
+function report(slug, errors) {
+  if (errors.length === 0) {
+    console.log(`✓ ${slug}`);
+    passed++;
+  } else {
+    console.log(`✗ ${slug}`);
+    errors.forEach(e => console.log(`  ✗ ${e}`));
+    failed++;
+  }
+}
 
 // ── Theme JSON validation ─────────────────────────────────────────────────────
 const REQUIRED_KEYS    = ['name', 'logo', 'fbHeader', 'fbFooter', 'colors'];
@@ -699,17 +1017,6 @@ themeFiles.forEach(filename => {
 
   report(slug, errors);
 });
-
-function report(slug, errors) {
-  if (errors.length === 0) {
-    console.log(`✓ ${slug}`);
-    passed++;
-  } else {
-    console.log(`✗ ${slug}`);
-    errors.forEach(e => console.log(`  ✗ ${e}`));
-    failed++;
-  }
-}
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log(`\n${'─'.repeat(40)}`);
