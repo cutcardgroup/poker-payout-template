@@ -5,7 +5,7 @@
   "description": "Poker tournament payout calculator — Cloudflare Pages deployment",
   "scripts": {
     "dev":    "npx serve . -p 3000",
-    "test":   "node scripts/test-payouts.js",
+    "test":   "node scripts/test-payouts.js && node scripts/test-bounty.js",
     "deploy": "npx wrangler pages deploy . --project-name=poker-payout"
   },
   "devDependencies": {

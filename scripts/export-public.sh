@@ -139,7 +139,8 @@ poker-payout/
 ├── logos/              # Operator logos (PNG preferred; SVG placeholder included)
 ├── scripts/
 │   ├── export-public.sh
-│   ├── test-payouts.js     # Payout calculation tests
+│   ├── test-payouts.js     # Payout calculation tests (39 cases)
+│   ├── test-bounty.js      # Mystery bounty calculation tests (63 cases)
 │   ├── test-random.js      # Random scenario stress test
 │   └── show-payout.js      # CLI tool — display payout table
 └── package.json
@@ -220,13 +221,15 @@ Each color key maps to the CSS variable `--<key>` on `:root`.
 
 ## Testing
 
-The test script mirrors the calculation logic from `index.html` and must pass before every commit:
+Both test suites mirror calculation logic from `index.html` and must pass before every commit:
 
 ```bash
-node scripts/test-payouts.js
+npm test   # runs test-payouts.js + test-bounty.js
 ```
 
-Covers: bracket selection, pool conservation, min-cash locking, guaranteed first, float precision, snap gap-inversion correction, Standard curve structure (ratio caps, monotone decay, grouped brackets), and theme JSON validation. Run it any time you edit payout logic or theme files.
+`test-payouts.js` — 39 tests: bracket selection, pool conservation, min-cash locking, guaranteed first, float precision, snap gap-inversion, Standard curve structure, and theme JSON validation.
+
+`test-bounty.js` — 63 tests: mystery bounty envelope distribution (`buildFlat`, `buildTiered`, `buildCustom`), monotonicity, min-bounty floor, waterfall remainder, and edge cases.
 
 ## Deploy to Cloudflare Pages
 
@@ -290,8 +293,9 @@ touch "$PUBLIC_DIR/logos/.gitkeep"
 mkdir -p "$PUBLIC_DIR/scripts"
 cp "$PRIVATE_DIR/scripts/export-public.sh" "$PUBLIC_DIR/scripts/export-public.sh"
 cp "$PRIVATE_DIR/scripts/test-payouts.js"  "$PUBLIC_DIR/scripts/test-payouts.js"
-cp "$PRIVATE_DIR/scripts/show-payout.js"  "$PUBLIC_DIR/scripts/show-payout.js"
-cp "$PRIVATE_DIR/scripts/test-random.js" "$PUBLIC_DIR/scripts/test-random.js"
+cp "$PRIVATE_DIR/scripts/test-bounty.js"   "$PUBLIC_DIR/scripts/test-bounty.js"
+cp "$PRIVATE_DIR/scripts/show-payout.js"   "$PUBLIC_DIR/scripts/show-payout.js"
+cp "$PRIVATE_DIR/scripts/test-random.js"   "$PUBLIC_DIR/scripts/test-random.js"
 chmod +x "$PUBLIC_DIR/scripts/export-public.sh"
 
 # ── Commit and push ─────────────────────────────────────────────────────────

@@ -153,6 +153,30 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
 #empty{text-align:center;padding:40px 16px;color:var(--dim);}
 #empty .suits{font-size:2.5rem;opacity:.2;}
 #empty p{margin-top:8px;font-size:.85rem;}
+
+/* ── TABS ── */
+.tab-strip{display:flex;gap:0;margin-bottom:16px;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.tab-btn{flex:1;background:var(--card2);border:none;color:var(--dim);font-family:'Bebas Neue',cursive;
+  letter-spacing:2px;font-size:1rem;padding:10px 16px;cursor:pointer;transition:all .15s;border-right:1px solid var(--border);}
+.tab-btn:last-child{border-right:none;}
+.tab-btn.active{background:var(--green);color:#fff;}
+.tab-btn:hover:not(.active){background:rgba(26,107,58,.2);color:var(--text);}
+
+/* ── MYSTERY BOUNTY ── */
+.mb-mode-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;}
+.mb-mode-btn{background:var(--card2);border:1px solid var(--border);border-radius:5px;color:var(--dim);
+  font-family:'Bebas Neue',cursive;letter-spacing:1px;font-size:.9rem;padding:6px 12px;cursor:pointer;transition:all .15s;}
+.mb-mode-btn.active{background:var(--gold);border-color:var(--gold2);color:#1a0f00;}
+.mb-tier-row{display:grid;grid-template-columns:80px 1fr 1fr auto;gap:8px;align-items:center;margin-bottom:6px;}
+.mb-tier-lbl{font-size:.72rem;color:var(--dim);text-align:right;}
+.mb-custom-row{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;margin-bottom:6px;}
+#mb-results-wrap{margin-top:16px;}
+#mb-results table{width:100%;}
+#mb-results thead th{background:var(--card2);padding:8px 10px;font-size:.6rem;text-transform:uppercase;letter-spacing:1.2px;color:var(--dim);text-align:left;}
+#mb-results td{padding:6px 10px;font-size:.84rem;border-bottom:1px solid rgba(42,64,48,.3);}
+#mb-results td.r{text-align:right;}
+#mb-results tfoot td{padding:8px 10px;font-family:'Source Code Pro',monospace;font-weight:600;border-top:2px solid var(--border);background:var(--card2);}
+.mb-tier-label{font-family:'Bebas Neue',cursive;font-size:.9rem;letter-spacing:1px;color:var(--gold);}
 </style>
 </head>
 <body>
@@ -167,6 +191,13 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
 </header>
 
 <div class="wrap">
+
+<div class="tab-strip">
+  <button class="tab-btn active" onclick="switchTab('payout')">♠ Payout Calculator</button>
+  <button class="tab-btn" onclick="switchTab('bounty')">🎯 Mystery Bounty</button>
+</div>
+
+<div id="tab-payout">
 
 <!-- ── SETUP ── -->
 <div class="card">
@@ -315,6 +346,66 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
     <span class="toast" id="toast">Copied!</span>
   </div>
 </div>
+
+</div><!-- /tab-payout -->
+
+<!-- ── MYSTERY BOUNTY TAB ── -->
+<div id="tab-bounty" style="display:none;">
+
+<div class="card">
+  <div class="card-title">🎯 Mystery Bounty Setup</div>
+
+  <div class="g3">
+    <div><label class="lbl">Bounty Pool ($)</label><input type="number" id="mb-pool" placeholder="e.g. 5000" min="1" oninput="calcMB()"></div>
+    <div><label class="lbl">Envelopes (players ITM)</label><input type="number" id="mb-n" placeholder="e.g. 20" min="1" oninput="calcMB()"></div>
+    <div><label class="lbl">Top Bounty ($) <span style="color:var(--dim);font-family:'Inter',sans-serif;font-size:.65rem;font-weight:400;">optional</span></label><input type="number" id="mb-top" placeholder="e.g. 1000" min="0" oninput="renderTierControls();calcMB()"></div>
+  </div>
+
+  <div class="g3" style="margin-top:10px;">
+    <div><label class="lbl">Min Bounty ($) <span style="color:var(--dim);font-family:'Inter',sans-serif;font-size:.65rem;font-weight:400;">optional</span></label><input type="number" id="mb-min" placeholder="e.g. 100" min="0" oninput="calcMB()"></div>
+    <div><label class="lbl">$0 Envelopes <span style="color:var(--dim);font-family:'Inter',sans-serif;font-size:.65rem;font-weight:400;">optional</span></label><input type="number" id="mb-zeros" placeholder="0" min="0" value="0" oninput="calcMB()"></div>
+    <div>
+      <label class="lbl">Snap ($)</label>
+      <div class="rtog-row">
+        <button class="rtog" data-mbsnap="10" onclick="setMBSnap(10,this)">$10</button>
+        <button class="rtog" data-mbsnap="25" onclick="setMBSnap(25,this)">$25</button>
+        <button class="rtog active" data-mbsnap="50" onclick="setMBSnap(50,this)">$50</button>
+        <button class="rtog" data-mbsnap="100" onclick="setMBSnap(100,this)">$100</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:14px;">
+    <div class="slbl">Distribution Mode</div>
+    <div class="mb-mode-row">
+      <button class="mb-mode-btn active" id="mb-mode-tiered" onclick="setMBMode('tiered')">Tiered</button>
+      <button class="mb-mode-btn" id="mb-mode-flat" onclick="setMBMode('flat')">Flat</button>
+      <button class="mb-mode-btn" id="mb-mode-custom" onclick="setMBMode('custom')">Custom</button>
+    </div>
+  </div>
+
+  <!-- Tiered settings -->
+  <div id="mb-tiered-settings" style="margin-top:14px;">
+    <div class="slbl">Tier Settings <span style="color:var(--dim);font-family:'Inter',sans-serif;font-size:.65rem;font-weight:400;">— adjust % of envelopes and prize multiplier per tier</span></div>
+    <div style="margin-top:8px;" id="mb-tier-rows"></div>
+  </div>
+
+  <!-- Custom settings -->
+  <div id="mb-custom-settings" style="margin-top:14px;display:none;">
+    <div class="slbl">Custom Tiers <span style="color:var(--dim);font-family:'Inter',sans-serif;font-size:.65rem;font-weight:400;">— set exact count and prize for each tier</span></div>
+    <div style="margin-top:8px;" id="mb-custom-rows"></div>
+    <button class="btn btn-ghost" style="margin-top:6px;font-size:.8rem;padding:6px 12px;" onclick="addMBCustomRow()">+ Add Tier</button>
+    <div id="mb-custom-validation" style="margin-top:8px;font-size:.75rem;font-family:'Source Code Pro',monospace;"></div>
+  </div>
+</div>
+
+<!-- Results -->
+<div class="card" id="mb-results-wrap" style="display:none;">
+  <div class="card-title">📋 Envelope Distribution</div>
+  <div id="mb-results"></div>
+</div>
+
+</div><!-- /tab-bounty -->
 
 </div><!-- /wrap -->
 
@@ -785,6 +876,11 @@ function lockBadge(rowIdx, r){
   return ` <span title="${tip}" style="cursor:help;font-size:.8em;">🔒</span>`;
 }
 
+function floorBadge(rawPrize){
+  const tip=`At min cash via rounding — raw prize was ${fmt(rawPrize)}, which the $${SNAP} snap rounded down to ${fmt(MINCASH)}. Not locked — editing is unrestricted.`;
+  return ` <span title="${tip}" style="cursor:help;font-size:.8em;">🔽</span>`;
+}
+
 // ─────────────────────────────────────────────────────────
 // RENDER TABLE
 // ─────────────────────────────────────────────────────────
@@ -859,9 +955,10 @@ function render(){
     const pEach=(rawPrize/POOL*100).toFixed(3);
     const low=(MINCASH>0&&rawPrize<MINCASH-0.01)
       ?'<span style="background:var(--red);color:#fff;font-size:.55rem;padding:1px 4px;border-radius:3px;margin-left:3px;">LOW</span>':'';
+    const atSnappedFloor=!r.locked&&MINCASH>0&&SNAP>0&&Math.abs(dispPrize-MINCASH)<0.01&&rawPrize>MINCASH-0.01;
 
     h+=`<tr>
-      <td class="pos">${r.label}${r.locked?lockBadge(editIdx,r):''}</td>
+      <td class="pos">${r.label}${r.locked?lockBadge(editIdx,r):atSnappedFloor?floorBadge(rawPrize):''}</td>
       <td class="r"><input class="w75" type="number" step="0.001" value="${pEach}" onchange="${onchgPct}"></td>
       <td class="r"><input class="w100" type="number" step="${isPinned?1:(SNAP||1)}" value="${dispPrize%1?dispPrize.toFixed(2):dispPrize.toFixed(0)}" onchange="${onchgPrize}">${low}</td>
       <td class="r rt">${fmt(dispPrize*r.count)}${r.count>1?`<br><span style="font-size:.65rem;color:var(--dim);">×${r.count}</span>`:''}</td>
@@ -1099,7 +1196,369 @@ document.addEventListener('DOMContentLoaded',()=>{
     if(!e.target.closest('#ptog-curve')&&!e.target.closest('#curve-menu'))
       document.getElementById('curve-menu').style.display='none';
   });
+  initMB();
 });
+
+// ─────────────────────────────────────────────────────────
+// TAB SWITCHING
+// ─────────────────────────────────────────────────────────
+function switchTab(tab){
+  document.getElementById('tab-payout').style.display=tab==='payout'?'':'none';
+  document.getElementById('tab-bounty').style.display=tab==='bounty'?'':'none';
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',(tab==='payout'&&i===0)||(tab==='bounty'&&i===1)));
+}
+
+// ─────────────────────────────────────────────────────────
+// MYSTERY BOUNTY STATE
+// ─────────────────────────────────────────────────────────
+let MB_SNAP=50;
+let MB_MODE='tiered';
+const MB_TIER_LABELS=['Top Bounty','Tier 2','Tier 3','Tier 4'];
+let MB_TIERS=[
+  {pct:10,mult:30},
+  {pct:15,mult:12},
+  {pct:25,mult:4},
+  {pct:50,mult:1},
+];
+let MB_CUSTOM=[];
+let MB_POOL=0,MB_N=0,MB_ROWS=[],MB_CONFIG={};
+
+function setMBSnap(v,btn){
+  MB_SNAP=v;
+  document.querySelectorAll('[data-mbsnap]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  calcMB();
+}
+
+function setMBMode(mode){
+  MB_MODE=mode;
+  document.querySelectorAll('.mb-mode-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('mb-mode-'+mode).classList.add('active');
+  document.getElementById('mb-tiered-settings').style.display=mode==='tiered'?'':'none';
+  document.getElementById('mb-custom-settings').style.display=mode==='custom'?'':'none';
+  calcMB();
+}
+
+// ─────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────
+function initMB(){
+  renderTierControls();
+  if(MB_CUSTOM.length===0) MB_CUSTOM=[{count:'',value:''},{count:'',value:''}];
+  renderCustomControls();
+}
+
+function renderTierControls(){
+  const container=document.getElementById('mb-tier-rows');
+  const lShift=(parseFloat(document.getElementById('mb-top')?.value)||0)>0?1:0;
+  container.innerHTML=MB_TIERS.map((t,i)=>`
+    <div class="mb-tier-row">
+      <span class="mb-tier-lbl">${MB_TIER_LABELS[i+lShift]||'Tier '+(i+1+lShift)}</span>
+      <div><label class="lbl" style="font-size:.6rem;">Weight</label>
+        <input type="number" min="1" max="99" value="${t.pct}" oninput="MB_TIERS[${i}].pct=+this.value;calcMB()"></div>
+      <div><label class="lbl" style="font-size:.6rem;">Multiplier ×</label>
+        <input type="number" min="0.1" step="0.5" value="${t.mult}" oninput="MB_TIERS[${i}].mult=+this.value;calcMB()"></div>
+      <div style="padding-top:18px;">${MB_TIERS.length>2?`<button class="btn btn-ghost" style="padding:4px 8px;font-size:.7rem;" onclick="removeMBTier(${i})">✕</button>`:''}</div>
+    </div>`).join('')+
+    `<button class="btn btn-ghost" style="font-size:.8rem;padding:6px 12px;margin-top:4px;" onclick="addMBTier()">+ Add Tier</button>`;
+}
+
+function addMBTier(){
+  // Add a new smallest tier at the bottom (half the current bottom's multiplier, min 0.5)
+  MB_TIERS.push({pct:10,mult:Math.max(0.5,MB_TIERS[MB_TIERS.length-1].mult/2)});
+  renderTierControls();calcMB();
+}
+function removeMBTier(i){MB_TIERS.splice(i,1);renderTierControls();calcMB();}
+
+function renderCustomControls(){
+  const container=document.getElementById('mb-custom-rows');
+  container.innerHTML=MB_CUSTOM.map((r,i)=>`
+    <div class="mb-custom-row">
+      <div><label class="lbl" style="font-size:.6rem;">Count</label>
+        <input type="number" min="1" value="${r.count}" placeholder="e.g. 10" oninput="MB_CUSTOM[${i}].count=+this.value;calcMB()"></div>
+      <div><label class="lbl" style="font-size:.6rem;">Prize ($)</label>
+        <input type="number" min="0" value="${r.value}" placeholder="e.g. 100" oninput="MB_CUSTOM[${i}].value=+this.value;calcMB()"></div>
+      <div style="padding-top:18px;">${MB_CUSTOM.length>1?`<button class="btn btn-ghost" style="padding:4px 8px;font-size:.7rem;" onclick="removeMBCustomRow(${i})">✕</button>`:''}</div>
+    </div>`).join('');
+}
+function addMBCustomRow(){MB_CUSTOM.push({count:'',value:''});renderCustomControls();calcMB();}
+function removeMBCustomRow(i){MB_CUSTOM.splice(i,1);renderCustomControls();calcMB();}
+
+// ─────────────────────────────────────────────────────────
+// CALCULATION
+// ─────────────────────────────────────────────────────────
+function mbSnap(v,to){if(!to||to<=0)return Math.round(v);return Math.round(v/to)*to;}
+
+function distributeCounts(pcts,n){
+  const total=pcts.reduce((a,b)=>a+b,0);
+  const norm=pcts.map(p=>p/total*n);
+  const floors=norm.map(Math.floor);
+  const deficit=n-floors.reduce((a,b)=>a+b,0);
+  const rems=norm.map((v,i)=>({i,r:v-floors[i]})).sort((a,b)=>b.r-a.r);
+  for(let k=0;k<deficit;k++) floors[rems[k].i]++;
+  return floors;
+}
+
+function buildTiered(pool,n,zeros,topBounty,tiers,snap,minBounty){
+  const results=[];
+  let activeN=n-zeros;
+  let activePool=pool;
+
+  if(topBounty>0){activeN=Math.max(0,activeN-1);activePool=Math.max(0,activePool-topBounty);}
+  if(activeN<=0||activePool<=0){
+    const early=topBounty>0?[{count:1,value:topBounty,isTop:true}]:[];
+    if(zeros>0) early.push({count:zeros,value:0,isZero:true});
+    return early;
+  }
+
+  const counts=distributeCounts(tiers.map(t=>t.pct),activeN);
+  // Solve for base: pool = sum(counts[i] * base * tiers[i].mult)
+  // tiers are stored highest-first: tiers[0]=Top, tiers[last]=Small
+  const weightedSum=counts.reduce((s,c,i)=>s+c*tiers[i].mult,0);
+  if(weightedSum<=0) return [];
+  const base=activePool/weightedSum;
+
+  // Snap each tier value (vals[0]=highest, vals[last]=lowest)
+  const vals=tiers.map(t=>mbSnap(base*t.mult,snap));
+
+  // Enforce strictly decreasing from index 0 downward (reduce lower tiers on ties)
+  for(let i=1;i<tiers.length;i++) if(vals[i]>=vals[i-1]&&snap>0) vals[i]=Math.max(0,vals[i-1]-snap);
+
+  // Apply min bounty floor to bottom tier AFTER monotonicity so it can't be undone
+  const mbFloor=minBounty>0?(snap>0?Math.ceil(minBounty/snap)*snap:minBounty):0;
+  const last=tiers.length-1;
+  if(mbFloor>0&&vals[last]<mbFloor){
+    vals[last]=mbFloor;
+    // Re-enforce descending above the floor (push tiers upward as needed)
+    for(let i=last-1;i>=0;i--) if(vals[i]<=vals[i+1]) vals[i]=vals[i+1]+(snap>0?snap:1);
+  }
+
+  // Distribute remainder top-down, preserving descending monotonicity
+  let snappedTotal=counts.reduce((s,c,i)=>s+c*vals[i],0);
+  let rem=activePool-snappedTotal;
+  for(let j=0;j<vals.length&&rem!==0;j++){
+    const minV=j<last?vals[j+1]+(snap>0?snap:1):mbFloor;
+    const proposed=vals[j]+rem/counts[j];
+    if(proposed>=minV){vals[j]=proposed;rem=0;}
+    else{const canAbsorb=(vals[j]-minV)*counts[j];rem+=canAbsorb;vals[j]=minV;}
+  }
+
+  // Build result array (already highest → lowest since tiers are stored that way)
+  for(let i=0;i<tiers.length;i++){
+    const lShift=topBounty>0?1:0;
+    if(counts[i]>0) results.push({count:counts[i],value:vals[i],tierLabel:MB_TIER_LABELS[i+lShift]||'Tier '+(i+1+lShift)});
+  }
+
+  if(topBounty>0) results.unshift({count:1,value:topBounty,isTop:true});
+  if(zeros>0) results.push({count:zeros,value:0,isZero:true});
+  return results;
+}
+
+function buildFlat(pool,n,zeros,topBounty,snap,minBounty){
+  const results=[];
+  let activeN=n-zeros;
+  let activePool=pool;
+  if(topBounty>0){activeN=Math.max(0,activeN-1);activePool=Math.max(0,activePool-topBounty);}
+  if(activeN<=0) {
+    if(topBounty>0) results.push({count:1,value:topBounty,isTop:true});
+    if(zeros>0) results.push({count:zeros,value:0,isZero:true});
+    return results;
+  }
+  let base=mbSnap(activePool/activeN,snap);
+  // Snap (or Math.round when snap=0) can round up; step down one unit to keep remainder ≥ 0
+  if(base*activeN>activePool) base-=snap>0?snap:1;
+  // Apply min bounty floor
+  if(minBounty>0){
+    const floor=snap>0?Math.ceil(minBounty/snap)*snap:minBounty;
+    if(base<floor) base=floor;
+  }
+  const rem=activePool-base*activeN;
+  const topVal=base+(snap>0?Math.round(rem/snap)*snap:rem);
+  if(topBounty>0) results.push({count:1,value:topBounty,isTop:true});
+  if(topVal!==base) results.push({count:1,value:topVal});
+  results.push({count:topVal!==base?activeN-1:activeN,value:base});
+  if(zeros>0) results.push({count:zeros,value:0,isZero:true});
+  return results.filter(r=>r.count>0);
+}
+
+function buildCustom(pool,n,zeros,topBounty,customTiers){
+  // Just validate and return as-is — operator controls everything
+  const rows=customTiers.filter(r=>r.count>0&&r.value>=0);
+  const totalCount=rows.reduce((s,r)=>s+r.count,0)+(topBounty>0?1:0)+zeros;
+  const totalVal=rows.reduce((s,r)=>s+r.count*r.value,0)+(topBounty>0?topBounty:0);
+  return {rows,totalCount,totalVal,valid:Math.abs(totalVal-pool)<1&&totalCount===n};
+}
+
+function calcMB(){
+  const pool=parseFloat(document.getElementById('mb-pool').value)||0;
+  const n=parseInt(document.getElementById('mb-n').value)||0;
+  const topBounty=parseFloat(document.getElementById('mb-top').value)||0;
+  const minBounty=parseFloat(document.getElementById('mb-min').value)||0;
+  const zeros=parseInt(document.getElementById('mb-zeros').value)||0;
+  if(!pool||!n){document.getElementById('mb-results-wrap').style.display='none';return;}
+
+  MB_CONFIG={mode:MB_MODE,snap:MB_SNAP,zeros,topBounty,minBounty,
+    tierSettings:MB_MODE==='tiered'?MB_TIERS.map((t,i)=>{const ls=topBounty>0?1:0;return{...t,label:MB_TIER_LABELS[i+ls]||'Tier '+(i+1+ls)};}):null};
+
+  let tiers=[];
+  if(MB_MODE==='tiered') tiers=buildTiered(pool,n,zeros,topBounty,MB_TIERS,MB_SNAP,minBounty);
+  else if(MB_MODE==='flat') tiers=buildFlat(pool,n,zeros,topBounty,MB_SNAP,minBounty);
+  else {renderMBCustomValidation(pool,n,zeros,topBounty);return;}
+
+  MB_ROWS=tiers; MB_POOL=pool; MB_N=n;
+  _renderMBResults();
+}
+
+function renderMBCustomValidation(pool,n,zeros,topBounty){
+  MB_CONFIG={mode:'custom',snap:MB_SNAP,zeros,topBounty,minBounty:0,tierSettings:null};
+  const cv=buildCustom(pool,n,zeros,topBounty,MB_CUSTOM);
+  const el=document.getElementById('mb-custom-validation');
+  const countOk=cv.totalCount===n;
+  const valOk=Math.abs(cv.totalVal-pool)<1;
+  el.innerHTML=`<span style="color:${countOk?'var(--green3)':'var(--red)'};">Envelopes: ${cv.totalCount} / ${n}</span>&nbsp;&nbsp;`+
+    `<span style="color:${valOk?'var(--green3)':'var(--red)'};">Pool: ${fmtMB(cv.totalVal)} / ${fmtMB(pool)}</span>`;
+  if(cv.valid){
+    MB_ROWS=[...cv.rows.slice().reverse().map(r=>({count:r.count,value:r.value})),...(topBounty>0?[{count:1,value:topBounty,isTop:true}]:[]),...(zeros>0?[{count:zeros,value:0,isZero:true}]:[])];
+    MB_POOL=pool; MB_N=n; _renderMBResults();
+  } else document.getElementById('mb-results-wrap').style.display='none';
+}
+
+function fmtMB(n){return '$'+Math.round(n).toLocaleString('en-AU');}
+function pct(v,total){return total>0?(v/total*100).toFixed(1)+'%':'—';}
+
+function _renderMBResults(){
+  const tiers=MB_ROWS,pool=MB_POOL,n=MB_N;
+  const wrap=document.getElementById('mb-results-wrap');
+  const el=document.getElementById('mb-results');
+  if(!tiers||tiers.length===0){wrap.style.display='none';return;}
+  wrap.style.display='';
+
+  const totalCount=tiers.reduce((s,t)=>s+t.count,0);
+  const totalVal=tiers.reduce((s,t)=>s+t.count*t.value,0);
+  const poolOk=Math.abs(totalVal-pool)<1;
+  const countOk=totalCount===n;
+  const avgEV=pool/n;
+
+  let h=`<div class="tbl-wrap"><table>
+    <thead><tr>
+      <th>Tier</th><th class="r">Count</th><th class="r">Prize each</th>
+      <th class="r">Probability</th><th class="r">EV per elim</th>
+    </tr></thead><tbody>`;
+
+  tiers.forEach((t,i)=>{
+    const label=t.isTop?'🏆 Top Bounty':t.isZero?'💀 Blank':t.tierLabel||'●';
+    const prob=t.count/n;
+    const ev=prob*t.value;
+    const countCell=(t.isTop||t.isZero)
+      ?t.count
+      :`<input class="w75" type="number" min="0" step="1" value="${t.count}" onchange="editMBCount(${i},+this.value)">`;
+    const prizeCell=t.isZero
+      ?'<span style="color:var(--dim);">$0</span>'
+      :`<input class="w100" type="number" step="${MB_SNAP||1}" value="${Math.round(t.value)}" onchange="editMBPrize(${i},+this.value)">`;
+    h+=`<tr>
+      <td><span class="mb-tier-label">${label}</span></td>
+      <td class="r">${countCell}</td>
+      <td class="r" style="font-family:'Source Code Pro',monospace;">${prizeCell}</td>
+      <td id="mb-prob-${i}" class="r" style="color:var(--dim);font-family:'Source Code Pro',monospace;">${pct(t.count,n)}</td>
+      <td id="mb-ev-${i}" class="r" style="font-family:'Source Code Pro',monospace;">${fmtMB(ev)}</td>
+    </tr>`;
+  });
+
+  h+=`</tbody><tfoot><tr>
+    <td>TOTAL</td>
+    <td id="mb-fc" class="r" style="color:${countOk?'var(--green3)':'var(--red)'};">${totalCount} ${countOk?'✓':'✗'}</td>
+    <td id="mb-fv" class="r" style="color:${poolOk?'var(--green3)':'var(--red)'};">${fmtMB(totalVal)} ${poolOk?'✓':'✗'}</td>
+    <td class="r" style="color:var(--dim);">—</td>
+    <td class="r" style="color:var(--gold2);font-family:'Source Code Pro',monospace;">avg ${fmtMB(avgEV)}</td>
+  </tr></tfoot></table></div>`;
+
+  h+=`<div id="mb-config-section">${_buildConfigHTML()}</div>`;
+  el.innerHTML=h;
+}
+
+function _buildConfigHTML(){
+  const c=MB_CONFIG;
+  if(!c.mode) return '';
+  const topRow=MB_ROWS.find(t=>t.isTop);
+  const regularTiers=MB_ROWS.filter(t=>!t.isTop&&!t.isZero);
+  if(!regularTiers.length&&!topRow) return '';
+
+  const parts=[];
+  if(c.snap) parts.push(`Snap ${fmtMB(c.snap)}`);
+  if(c.minBounty) parts.push(`Min ${fmtMB(c.minBounty)}`);
+  if(c.zeros) parts.push(`Blanks ${c.zeros}`);
+  const meta=parts.length?` · ${parts.join(' · ')}`:'';
+
+  // Back-calculate weight (= count) and multiplier (= prize / lowest prize)
+  // so these values can be typed back into Tier Settings to reproduce this distribution.
+  const prizes=regularTiers.map(t=>t.value).filter(v=>v>0);
+  const basePrize=prizes.length?Math.min(...prizes):0;
+
+  let h=`<div style="margin-top:16px;border-top:2px solid var(--border);padding-top:12px;">
+    <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:1.2px;color:var(--dim);margin-bottom:6px;">Distribution summary${meta}</div>
+    <div class="tbl-wrap"><table style="width:auto;">
+      <thead><tr>
+        <th>Tier</th><th class="r">Weight</th><th class="r">Multiplier</th>
+        <th class="r">Count</th><th class="r">Prize each</th>
+      </tr></thead><tbody>`;
+
+  if(topRow){
+    h+=`<tr>
+      <td><span class="mb-tier-label">🏆 Top Bounty</span></td>
+      <td class="r" style="color:var(--dim);">—</td><td class="r" style="color:var(--dim);">—</td>
+      <td class="r">1</td>
+      <td class="r" style="font-family:'Source Code Pro',monospace;">${fmtMB(topRow.value)}</td>
+    </tr>`;
+  }
+
+  regularTiers.forEach(t=>{
+    const mult=basePrize>0?Math.round(t.value/basePrize*100)/100:0;
+    h+=`<tr>
+      <td><span class="mb-tier-label">${t.tierLabel||'●'}</span></td>
+      <td class="r" style="color:var(--dim);">${t.count}</td>
+      <td class="r" style="font-family:'Source Code Pro',monospace;">×${mult}</td>
+      <td class="r">${t.count}</td>
+      <td class="r" style="font-family:'Source Code Pro',monospace;">${fmtMB(t.value)}</td>
+    </tr>`;
+  });
+
+  h+=`</tbody></table></div></div>`;
+  return h;
+}
+
+function _updateMBStats(){
+  const tiers=MB_ROWS,pool=MB_POOL,n=MB_N;
+  const totalCount=tiers.reduce((s,t)=>s+t.count,0);
+  const totalVal=tiers.reduce((s,t)=>s+t.count*t.value,0);
+  const poolOk=Math.abs(totalVal-pool)<1;
+  const countOk=totalCount===n;
+  tiers.forEach((t,i)=>{
+    const probEl=document.getElementById('mb-prob-'+i);
+    const evEl=document.getElementById('mb-ev-'+i);
+    if(probEl) probEl.textContent=pct(t.count,n);
+    if(evEl) evEl.textContent=fmtMB(t.count/n*t.value);
+  });
+  const fc=document.getElementById('mb-fc');
+  const fv=document.getElementById('mb-fv');
+  if(fc){fc.style.color=countOk?'var(--green3)':'var(--red)';fc.textContent=`${totalCount} ${countOk?'✓':'✗'}`;}
+  if(fv){fv.style.color=poolOk?'var(--green3)':'var(--red)';fv.textContent=`${fmtMB(totalVal)} ${poolOk?'✓':'✗'}`;}
+  const cs=document.getElementById('mb-config-section');
+  if(cs) cs.innerHTML=_buildConfigHTML();
+}
+
+function editMBPrize(i,val){
+  const v=parseFloat(val);
+  if(isNaN(v)||v<0)return;
+  MB_ROWS[i].value=v;
+  _updateMBStats();
+}
+
+function editMBCount(i,val){
+  const v=parseInt(val);
+  if(isNaN(v)||v<0)return;
+  MB_ROWS[i].count=v;
+  _updateMBStats();
+}
 </script>
 </body>
 </html>

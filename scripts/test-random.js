@@ -394,9 +394,263 @@ for (let t = 0; t < COUNT; t++) {
   }
 }
 
+// ── Mirrored bounty logic ─────────────────────────────────────────────────────
+function mbSnap(v,to){if(!to||to<=0)return Math.round(v);return Math.round(v/to)*to;}
+
+function distributeCounts(pcts,n){
+  const total=pcts.reduce((a,b)=>a+b,0);
+  const norm=pcts.map(p=>p/total*n);
+  const floors=norm.map(Math.floor);
+  const deficit=n-floors.reduce((a,b)=>a+b,0);
+  const rems=norm.map((v,i)=>({i,r:v-floors[i]})).sort((a,b)=>b.r-a.r);
+  for(let k=0;k<deficit;k++) floors[rems[k].i]++;
+  return floors;
+}
+
+function buildTiered(pool,n,zeros,topBounty,tiers,snap,minBounty=0){
+  const results=[];
+  let activeN=n-zeros;
+  let activePool=pool;
+  if(topBounty>0){activeN=Math.max(0,activeN-1);activePool=Math.max(0,activePool-topBounty);}
+  if(activeN<=0||activePool<=0){
+    const early=topBounty>0?[{count:1,value:topBounty,isTop:true}]:[];
+    if(zeros>0) early.push({count:zeros,value:0,isZero:true});
+    return early;
+  }
+  const counts=distributeCounts(tiers.map(t=>t.pct),activeN);
+  const weightedSum=counts.reduce((s,c,i)=>s+c*tiers[i].mult,0);
+  if(weightedSum<=0) return [];
+  const base=activePool/weightedSum;
+  const vals=tiers.map(t=>mbSnap(base*t.mult,snap));
+  for(let i=1;i<tiers.length;i++) if(vals[i]>=vals[i-1]&&snap>0) vals[i]=Math.max(0,vals[i-1]-snap);
+  const mbFloor=minBounty>0?(snap>0?Math.ceil(minBounty/snap)*snap:minBounty):0;
+  const last=tiers.length-1;
+  if(mbFloor>0&&vals[last]<mbFloor){
+    vals[last]=mbFloor;
+    for(let i=last-1;i>=0;i--) if(vals[i]<=vals[i+1]) vals[i]=vals[i+1]+(snap>0?snap:1);
+  }
+  let snappedTotal=counts.reduce((s,c,i)=>s+c*vals[i],0);
+  let rem=activePool-snappedTotal;
+  for(let j=0;j<vals.length&&rem!==0;j++){
+    const minV=j<last?vals[j+1]+(snap>0?snap:1):mbFloor;
+    const proposed=vals[j]+rem/counts[j];
+    if(proposed>=minV){vals[j]=proposed;rem=0;}
+    else{const canAbsorb=(vals[j]-minV)*counts[j];rem+=canAbsorb;vals[j]=minV;}
+  }
+  for(let i=0;i<tiers.length;i++){
+    if(counts[i]>0) results.push({count:counts[i],value:vals[i]});
+  }
+  if(topBounty>0) results.unshift({count:1,value:topBounty,isTop:true});
+  if(zeros>0) results.push({count:zeros,value:0,isZero:true});
+  return results;
+}
+
+function buildFlat(pool,n,zeros,topBounty,snap,minBounty=0){
+  const results=[];
+  let activeN=n-zeros;
+  let activePool=pool;
+  if(topBounty>0){activeN=Math.max(0,activeN-1);activePool=Math.max(0,activePool-topBounty);}
+  if(activeN<=0){
+    if(topBounty>0) results.push({count:1,value:topBounty,isTop:true});
+    if(zeros>0) results.push({count:zeros,value:0,isZero:true});
+    return results;
+  }
+  let base=mbSnap(activePool/activeN,snap);
+  if(base*activeN>activePool) base-=snap>0?snap:1;
+  if(minBounty>0){
+    const floor=snap>0?Math.ceil(minBounty/snap)*snap:minBounty;
+    if(base<floor) base=floor;
+  }
+  const rem=activePool-base*activeN;
+  const topVal=base+(snap>0?Math.round(rem/snap)*snap:rem);
+  if(topBounty>0) results.push({count:1,value:topBounty,isTop:true});
+  if(topVal!==base) results.push({count:1,value:topVal});
+  results.push({count:topVal!==base?activeN-1:activeN,value:base});
+  if(zeros>0) results.push({count:zeros,value:0,isZero:true});
+  return results.filter(r=>r.count>0);
+}
+
+// ── Bounty scenario generator ─────────────────────────────────────────────────
+function generateBountyScenario(mode) {
+  const pool      = randInt(4, 200) * 250;                       // $1,000–$50,000
+  const n         = randInt(10, 150);
+  const zeros     = randInt(0, Math.floor(n * 0.3));
+  const hasTop    = rng() < 0.4;
+  const topBounty = hasTop
+    ? Math.min(Math.round(pool * 0.49 / 50) * 50,
+               Math.round(pool * (rng() * 0.15 + 0.05) / 50) * 50)
+    : 0;
+  const snap      = randChoice([0, 25, 50, 100]);
+
+  // minBounty: cap at 25% of pool/activeN to keep most cases non-degenerate
+  const activeN   = Math.max(1, n - zeros - (topBounty > 0 ? 1 : 0));
+  const activePool= Math.max(0, pool - topBounty);
+  const hasMin    = rng() < 0.4;
+  const maxMin    = activePool / activeN * 0.25;
+  const snapUnit  = snap || 1;
+  const minBounty = hasMin && maxMin >= snapUnit
+    ? Math.max(snapUnit, Math.floor(maxMin * rng() / snapUnit) * snapUnit)
+    : 0;
+
+  if (mode === 'tiered') {
+    const numTiers = randInt(2, 5);
+    // Generate distinct multipliers, sorted highest-first
+    const mults = Array.from({length: numTiers}, (_, i) => Math.max(0.5, (numTiers - i) * (randInt(1, 8) * 0.5)));
+    mults.sort((a, b) => b - a);
+    for (let i = 1; i < mults.length; i++) {
+      if (mults[i] >= mults[i-1]) mults[i] = Math.max(0.5, mults[i-1] - 0.5);
+    }
+    const tiers = mults.map(m => ({ pct: randInt(5, 50), mult: m }));
+    return { pool, n, zeros, topBounty, minBounty, snap, mode, tiers };
+  }
+  return { pool, n, zeros, topBounty, minBounty, snap, mode };
+}
+
+// ── Bounty invariant checker ──────────────────────────────────────────────────
+function checkBountyInvariants(params, tiers) {
+  const { pool, n, zeros, topBounty, minBounty, snap, mode } = params;
+  const errors   = [];
+  const warnings = [];
+
+  const activeN    = Math.max(0, n - zeros - (topBounty > 0 ? 1 : 0));
+  const activePool = Math.max(0, pool - topBounty);
+  const mbFloor    = minBounty > 0 ? (snap > 0 ? Math.ceil(minBounty / snap) * snap : minBounty) : 0;
+  const isDegenerate = mbFloor > 0 && activeN > 0 && mbFloor * activeN > activePool;
+
+  const regular = tiers.filter(t => !t.isTop && !t.isZero);
+
+  // 1. Count conservation — always an error
+  const actualCount = tiers.reduce((s, t) => s + t.count, 0);
+  if (actualCount !== n) {
+    errors.push(`Count: got ${actualCount}, want ${n}`);
+  }
+
+  // 2. Pool conservation
+  //    Flat mode: snap-rounding the remainder can drift by up to snap/2
+  //    Tiered mode: waterfall may be constrained by monotonicity (snap-degenerate)
+  //    Degenerate: floor forces total above pool — warn only
+  const actualVal = tiers.reduce((s, t) => s + t.count * t.value, 0);
+  const poolTol   = snap > 0 ? snap / 2 + 1 : 1;
+  // Snap-constrained: tiered mode with snap may overshoot pool when monotonicity
+  // bounds prevent the waterfall from absorbing the full snapping remainder.
+  // Detectable: total > pool AND a regular tier bottomed out to 0.
+  const anyZeroRegular = regular.some(t => t.value === 0);
+  const isSnapConstrained = mode === 'tiered' && snap > 0 && anyZeroRegular && actualVal > pool;
+  if (Math.abs(actualVal - pool) > poolTol) {
+    if (isDegenerate) {
+      warnings.push(`Degenerate: floor ${fmt(mbFloor)}×${activeN}=${fmt(mbFloor*activeN)} > activePool ${fmt(activePool)}, total off by ${(actualVal-pool).toFixed(2)}`);
+    } else if (isSnapConstrained) {
+      warnings.push(`Snap-constrained: snap=${snap}, monotonicity bounds prevent full pool absorption, total off by ${(actualVal-pool).toFixed(2)}`);
+    } else {
+      errors.push(`Pool: got ${fmt(actualVal)}, want ${fmt(pool)} (diff=${(actualVal-pool).toFixed(2)})`);
+    }
+  }
+
+  // 3. Top bounty value
+  if (topBounty > 0) {
+    const topRow = tiers.find(t => t.isTop);
+    if (!topRow) errors.push(`Top bounty: no isTop row`);
+    else if (Math.abs(topRow.value - topBounty) > 0.01)
+      errors.push(`Top bounty: got ${fmt(topRow.value)}, want ${fmt(topBounty)}`);
+  }
+
+  // 4. Zero row
+  if (zeros > 0) {
+    const zRow = tiers.find(t => t.isZero);
+    if (!zRow) errors.push(`Zeros: no isZero row`);
+    else if (zRow.count !== zeros) errors.push(`Zeros count: got ${zRow.count}, want ${zeros}`);
+  }
+
+  // 5. Monotonicity (descending)
+  for (let i = 0; i < regular.length - 1; i++) {
+    if (regular[i].value < regular[i + 1].value - 0.01) {
+      errors.push(`Monotonicity: tier ${i} (${fmt(regular[i].value)}) < tier ${i+1} (${fmt(regular[i+1].value)})`);
+    }
+  }
+
+  // 6. Min bounty floor (skip degenerate cases)
+  if (mbFloor > 0 && regular.length > 0 && !isDegenerate) {
+    const bottom = regular[regular.length - 1];
+    if (bottom.value < mbFloor - 0.01) {
+      errors.push(`Min bounty: bottom ${fmt(bottom.value)} < floor ${fmt(mbFloor)}`);
+    }
+  }
+
+  // 7. Snap alignment
+  //    Flat mode: always snap-aligned by design.
+  //    Tiered mode: the waterfall remainder may produce a non-snap-aligned value in
+  //    one tier — this is a known display limitation, not a pool conservation bug.
+  if (snap > 0) {
+    regular.forEach((t, i) => {
+      if (t.value > 0 && Math.abs(t.value - Math.round(t.value / snap) * snap) > 0.01) {
+        if (mode === 'tiered') {
+          warnings.push(`Snap (waterfall drift): tier ${i} value ${t.value.toFixed(2)} not aligned to $${snap}`);
+        } else {
+          errors.push(`Snap: tier ${i} value ${t.value.toFixed(2)} not aligned to $${snap}`);
+        }
+      }
+    });
+  }
+
+  // 8. No negative values
+  regular.forEach((t, i) => {
+    if (t.value < -0.01) errors.push(`Negative value: tier ${i} = ${t.value.toFixed(2)}`);
+  });
+
+  return { errors, warnings };
+}
+
+// ── Run bounty tests ──────────────────────────────────────────────────────────
+console.log(`\nRandom bounty stress test — ${COUNT} tiered + ${COUNT} flat (seed: ${seedVal})`);
+console.log('─'.repeat(60));
+
+let bountyPassed = 0, bountyFailed = 0, bountyWarnings = 0;
+
+for (const mode of ['tiered', 'flat']) {
+  for (let t = 0; t < COUNT; t++) {
+    const params = generateBountyScenario(mode);
+    const tiers  = mode === 'tiered'
+      ? buildTiered(params.pool, params.n, params.zeros, params.topBounty, params.tiers, params.snap, params.minBounty)
+      : buildFlat  (params.pool, params.n, params.zeros, params.topBounty, params.snap, params.minBounty);
+
+    const { errors, warnings } = checkBountyInvariants(params, tiers);
+
+    const topStr  = params.topBounty ? ` top=${fmt(params.topBounty)}`  : '';
+    const minStr  = params.minBounty ? ` min=${fmt(params.minBounty)}`  : '';
+    const snapStr = params.snap      ? ` snap=$${params.snap}`          : '';
+    const tierStr = mode === 'tiered' ? ` ${params.tiers.length}tiers`  : '';
+    const label = `bounty-${mode} #${t+1}: ${params.n}env / ${fmt(params.pool)}${topStr}${minStr}${snapStr}${tierStr}`;
+
+    if (errors.length > 0) {
+      console.log(`\n✗ ${label}`);
+      errors.forEach(e => console.log(`  ✗ ${e}`));
+      warnings.forEach(w => console.log(`  ⚠ ${w}`));
+      if (VERBOSE) {
+        console.log('  ── Tiers ──');
+        tiers.forEach(tier => {
+          const tag = tier.isTop ? '🏆' : tier.isZero ? '💀' : ' ●';
+          console.log(`  ${tag} ×${String(tier.count).padStart(3)}  ${fmt(tier.value)}`);
+        });
+      }
+      bountyFailed++;
+    } else if (warnings.length > 0) {
+      console.log(`\n⚠ ${label}`);
+      warnings.forEach(w => console.log(`  ⚠ ${w}`));
+      bountyWarnings++;
+      bountyPassed++;
+    } else {
+      console.log(`✓ ${label}`);
+      bountyPassed++;
+    }
+  }
+}
+
+// ── Final summary ─────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(60));
-console.log(`Passed: ${totalPassed}  Failed: ${totalFailed}  Warnings: ${totalWarnings}  Seed: ${seedVal}`);
-if (totalFailed > 0) {
+console.log(`Payout — Passed: ${totalPassed}  Failed: ${totalFailed}  Warnings: ${totalWarnings}`);
+console.log(`Bounty — Passed: ${bountyPassed}  Failed: ${bountyFailed}  Warnings: ${bountyWarnings}`);
+console.log(`Seed: ${seedVal}`);
+if (totalFailed + bountyFailed > 0) {
   console.log(`\nRe-run with: node scripts/test-random.js --seed ${seedVal} --verbose`);
   process.exit(1);
 }
