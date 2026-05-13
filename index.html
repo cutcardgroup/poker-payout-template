@@ -16,7 +16,7 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{
-  background:var(--dark);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;
+  background:var(--dark);color:var(--text);font-family:var(--font-body,'Inter'),sans-serif;min-height:100vh;
   background-image:radial-gradient(ellipse at 20% 20%,rgba(26,107,58,.15) 0%,transparent 50%),
                    radial-gradient(ellipse at 80% 80%,rgba(200,168,75,.08) 0%,transparent 50%);
 }
@@ -28,7 +28,7 @@ header{
   padding:14px 20px;display:flex;align-items:center;gap:12px;
 }
 header .suit{font-size:1.6rem;color:var(--gold);}
-header h1{font-family:'Bebas Neue',cursive;font-size:1.5rem;letter-spacing:3px;color:var(--gold2);}
+header h1{font-family:var(--font-display,'Bebas Neue'),cursive;font-size:1.5rem;letter-spacing:3px;color:var(--gold2);}
 header p{font-size:.7rem;color:var(--dim);margin-top:1px;}
 #hdr-logo{height:44px;max-width:180px;object-fit:contain;display:none;}
 
@@ -226,12 +226,12 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
 
   <div id="stdnew-params" style="display:block;margin-bottom:10px;">
     <span id="ratio-summary" onclick="toggleRatios()"
-      data-tip="Sets the prize gap at the top. 1.45× means 1st wins 45% more than 2nd; 1.30× means 2nd wins 30% more than 3rd. Places from 3rd down decay at a fixed rate."
+      data-tip="Sets the prize gap at the top. 1.45× means 1st wins 45% more than 2nd; 1.30× means 2nd wins 30% more than 3rd. Decay controls how fast prizes drop from 3rd down — higher = flatter mid-field."
       style="font-size:.72rem;color:var(--dim);cursor:pointer;user-select:none;">
-      Ratios: <span id="ratio-display">1.45× / 1.30×</span> &nbsp;<span style="font-size:.65rem;">▾ adjust</span>
+      Ratios: <span id="ratio-display">1.45× / 1.30× / 0.82</span> &nbsp;<span style="font-size:.65rem;">▾ adjust</span>
     </span>
     <div id="ratio-fields" style="display:none;margin-top:8px;">
-      <div class="g2" style="max-width:280px;">
+      <div class="g3" style="max-width:420px;">
         <div>
           <label class="lbl">1st / 2nd ratio</label>
           <input type="number" id="f-cap12" value="1.45" min="1.01" max="3" step="0.01"
@@ -240,6 +240,11 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
         <div>
           <label class="lbl">2nd / 3rd ratio</label>
           <input type="number" id="f-cap23" value="1.30" min="1.01" max="3" step="0.01"
+            onchange="updateRatioDisplay();if(ROWS.length)go()">
+        </div>
+        <div>
+          <label class="lbl">Decay (3rd↓)</label>
+          <input type="number" id="f-decay" value="0.82" min="0.50" max="0.99" step="0.01"
             onchange="updateRatioDisplay();if(ROWS.length)go()">
         </div>
       </div>
@@ -278,6 +283,14 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
     <div id="g-field" style="display:none;">
       <label class="lbl" id="g-lbl">Amount ($)</label>
       <input type="number" id="f-gval" placeholder="e.g. 17500" min="0" step="any">
+    </div>
+    <div>
+      <label class="lbl">Final Table size</label>
+      <input type="number" id="f-ft-size" placeholder="e.g. 9" min="0" max="50" step="1" value="9">
+    </div>
+    <div>
+      <label class="lbl">Min 1st place (%)</label>
+      <input type="number" id="f-min-first-pct" placeholder="e.g. 20" min="0" max="100" step="0.5" value="0">
     </div>
   </div>
 
@@ -419,7 +432,7 @@ let PT=[], PT_PCT=0;  // PT_PCT>0 → per-placing mode (ceil(entries×PT_PCT/100
 // ─────────────────────────────────────────────────────────
 // STATE
 // ─────────────────────────────────────────────────────────
-let ROWS=[], POOL=0, MINCASH=0, ENTRIES=0, GFIRST=0, SNAP=0;
+let ROWS=[], POOL=0, MINCASH=0, ENTRIES=0, GFIRST=0, SNAP=0, MIN_FIRST_PCT=0, FT_SIZE=0;
 let PAYOUT_MODE='standard';
 let MAX_SAME=3;
 let THEME={};
@@ -579,8 +592,8 @@ function buildExp(rows,pool,k){
 // Standard (new): geometric decay from 3rd down, then apply ratio caps at top.
 // 1st = 2nd × 1.40, 2nd = 3rd × 1.28, 3rd+ = 82% geometric decay.
 // Brackets with count>1 get the average weight of their constituent positions.
-function buildStandardNew(struct,pool,cap12,cap23){
-  const DECAY=0.82, CAP12=cap12||1.45, CAP23=cap23||1.30;
+function buildStandardNew(struct,pool,cap12,cap23,decay){
+  const DECAY=decay||0.82, CAP12=cap12||1.45, CAP23=cap23||1.30;
   const n=struct.reduce((s,r)=>s+r.count,0);
   if(!n) return [];
   const w=new Array(n).fill(1.0);
@@ -677,7 +690,8 @@ function toggleRatios(){
 function updateRatioDisplay(){
   const c12=parseFloat(document.getElementById('f-cap12').value)||1.45;
   const c23=parseFloat(document.getElementById('f-cap23').value)||1.30;
-  document.getElementById('ratio-display').textContent=c12.toFixed(2)+'× / '+c23.toFixed(2)+'×';
+  const dc=parseFloat(document.getElementById('f-decay').value)||0.82;
+  document.getElementById('ratio-display').textContent=c12.toFixed(2)+'× / '+c23.toFixed(2)+'× / '+dc.toFixed(2);
 }
 
 function setPayoutMode(mode){
@@ -722,7 +736,9 @@ function go(){
   if(gtype==='dollar'&&gval>0) gfirst=gval;
   if(gtype==='pct'&&gval>0) gfirst=(gval/100)*pool;
 
-  POOL=pool; MINCASH=mc; ENTRIES=entries; GFIRST=gfirst;
+  const minFirstPct=parseFloat($('f-min-first-pct').value)||0;
+  const ftSize=parseInt($('f-ft-size').value)||0;
+  POOL=pool; MINCASH=mc; ENTRIES=entries; GFIRST=gfirst; MIN_FIRST_PCT=minFirstPct; FT_SIZE=ftSize;
   updateMaxSameDisplay();
   const maxSame=MAX_SAME;
 
@@ -734,7 +750,8 @@ function go(){
   if(PAYOUT_MODE==='standard'){
     const cap12=parseFloat($('f-cap12').value)||1.45;
     const cap23=parseFloat($('f-cap23').value)||1.30;
-    rows=buildStandardNew(struct,pool,cap12,cap23);
+    const decay=parseFloat($('f-decay').value)||0.82;
+    rows=buildStandardNew(struct,pool,cap12,cap23,decay);
   } else if(PAYOUT_MODE==='standard-old'){
     rows=struct.map(r=>({label:r.label,count:r.count,prize:(r.pct/100)*pool,locked:false}));
   } else {
@@ -857,6 +874,54 @@ function go(){
     }
   }
 
+  // Pass 4: min first-place floor (floor only — GFIRST hard-lock takes precedence)
+  if(minFirstPct>0&&gfirst===0){
+    const minFirst=(minFirstPct/100)*pool;
+    if(rows[0].prize<minFirst-0.01){
+      rows[0].prize=minFirst; rows[0].locked=true;
+      scaleUnlocked(rows,pool);
+      if(mc>0){
+        let changed4=true;
+        while(changed4){
+          changed4=false;
+          for(let i=rows.length-1;i>=0;i--){
+            if(!rows[i].locked&&rows[i].prize<mc){
+              rows[i].prize=mc;rows[i].locked=true;changed4=true;
+            }
+          }
+          if(changed4) scaleUnlocked(rows,pool);
+        }
+      }
+    }
+  }
+
+  // Pass 5: FT 60% floor — top ftSize places must collectively receive ≥60% of pool.
+  // Only unlocked FT rows are scaled up; locked rows (GFIRST, min cash) are respected.
+  if(ftSize>0&&rows.length>ftSize){
+    const ftPlacesCount=rows.slice(0,ftSize).reduce((s,r)=>s+r.count,0);
+    if(ftPlacesCount===ftSize){
+      const ftLocked=rows.slice(0,ftSize).filter(r=>r.locked).reduce((s,r)=>s+r.prize*r.count,0);
+      const ftUnlocked=rows.slice(0,ftSize).filter(r=>!r.locked);
+      const ftUnlockedCur=ftUnlocked.reduce((s,r)=>s+r.prize*r.count,0);
+      const ftTotal=ftLocked+ftUnlockedCur;
+      const nonFtLocked=rows.slice(ftSize).filter(r=>r.locked).reduce((s,r)=>s+r.prize*r.count,0);
+      const maxFtCanGet=pool-nonFtLocked;
+      const ftTarget=Math.min(0.6*pool,maxFtCanGet);
+      if(ftTotal<ftTarget-0.01&&ftUnlockedCur>0){
+        const deficit=ftTarget-ftTotal;
+        const ftUnlockedScale=(ftUnlockedCur+deficit)/ftUnlockedCur;
+        ftUnlocked.forEach(r=>r.prize*=ftUnlockedScale);
+        const nonFtUnlocked=rows.slice(ftSize).filter(r=>!r.locked);
+        const nonFtUnlockedCur=nonFtUnlocked.reduce((s,r)=>s+r.prize*r.count,0);
+        const nonFtUnlockedTarget=pool-ftTarget-nonFtLocked;
+        if(nonFtUnlocked.length>0&&nonFtUnlockedCur>0){
+          const sc=Math.max(nonFtUnlockedTarget/nonFtUnlockedCur,0);
+          nonFtUnlocked.forEach(r=>r.prize*=sc);
+        }
+      }
+    }
+  }
+
   ROWS=rows;
   render(); renderFB(); updateStatus();
 }
@@ -868,6 +933,8 @@ function lockBadge(rowIdx, r){
   let tip;
   if(rowIdx===0 && GFIRST>0 && r.prize>=GFIRST-0.01){
     tip=`Guaranteed 1st place minimum of ${fmt(GFIRST)}`;
+  } else if(rowIdx===0 && MIN_FIRST_PCT>0 && GFIRST===0 && r.prize>=(MIN_FIRST_PCT/100)*POOL-0.01){
+    tip=`Min 1st place floor of ${MIN_FIRST_PCT}% (${fmt((MIN_FIRST_PCT/100)*POOL)})`;
   } else if(MINCASH>0 && r.prize<=MINCASH+0.01){
     tip=`Min cash floor — prize locked at ${fmt(MINCASH)}`;
   } else {
@@ -1164,11 +1231,28 @@ function applyTheme(theme){
   }
 
   // Example placeholders + default snap
+  if(theme.fontFamily){
+    const existing=document.getElementById('theme-font-link');
+    if(existing) existing.remove();
+    const link=document.createElement('link');
+    link.id='theme-font-link';
+    link.rel='stylesheet';
+    link.href='https://fonts.googleapis.com/css2?family='+encodeURIComponent(theme.fontFamily)+':wght@300;400;500;700&display=swap';
+    document.head.appendChild(link);
+    document.documentElement.style.setProperty('--font-body',`'${theme.fontFamily}'`);
+    document.documentElement.style.setProperty('--font-display',`'${theme.fontFamily}'`);
+  }
+
   if(theme.examples){
     const ex=theme.examples;
     if(ex.entries)  $('f-entries').placeholder='e.g. '+ex.entries;
     if(ex.pool)     $('f-pool').placeholder='e.g. '+ex.pool;
     if(ex.minCash)  $('f-mincash').placeholder='e.g. '+ex.minCash;
+    if(ex.ftSize!=null) $('f-ft-size').value=ex.ftSize;
+    if(ex.minFirstPct!=null) $('f-min-first-pct').value=ex.minFirstPct;
+    if(ex.cap12!=null){ $('f-cap12').value=ex.cap12; updateRatioDisplay(); }
+    if(ex.cap23!=null){ $('f-cap23').value=ex.cap23; updateRatioDisplay(); }
+    if(ex.decay!=null){ $('f-decay').value=ex.decay; updateRatioDisplay(); }
     if(ex.snap!=null){
       const btn=document.querySelector('.rtog[data-v="'+ex.snap+'"]');
       if(btn) setRound(ex.snap,btn);

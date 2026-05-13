@@ -32,6 +32,8 @@ PUBLIC_DIR="$TMPDIR_WORK/public"
 echo "→ Copying static files..."
 cp "$PRIVATE_DIR/index.html"  "$PUBLIC_DIR/index.html"
 cp "$PRIVATE_DIR/admin.html"  "$PUBLIC_DIR/admin.html"
+# Strip real operator names from admin preview — public repo gets example stubs only
+sed -i "s/const KNOWN_THEMES = \[.*\];/const KNOWN_THEMES = ['default', 'example'];/" "$PUBLIC_DIR/admin.html"
 cp "$PRIVATE_DIR/package.json" "$PUBLIC_DIR/package.json"
 # README is generated below — never copy the private one
 cp "$PRIVATE_DIR/.gitignore"  "$PUBLIC_DIR/.gitignore"

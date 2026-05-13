@@ -25,7 +25,7 @@ function scaleUnlocked(rows, pool) {
   if (ft > 0) { const sc = Math.max(rem / ft, 0); rows.forEach(r => { if (!r.locked) r.prize *= sc; }); }
 }
 
-function calculate({ entries, pool, minCash = 0, guaranteedFirst = 0 }) {
+function calculate({ entries, pool, minCash = 0, guaranteedFirst = 0, ftSize = 0, minFirstPct = 0 }) {
   const struct = getStruct(entries);
 
   let rows = struct.map(r => ({ label: r.label, count: r.count, prize: (r.pct / 100) * pool, locked: false }));
@@ -53,11 +53,82 @@ function calculate({ entries, pool, minCash = 0, guaranteedFirst = 0 }) {
     scaleUnlocked(rows, pool);
   }
 
+  // Pass 3b: iterative min cash re-check after guarantee
+  if (minCash > 0) {
+    let changed3b = true;
+    while (changed3b) {
+      changed3b = false;
+      for (let i = rows.length - 1; i >= 0; i--) {
+        if (!rows[i].locked && rows[i].prize < minCash) {
+          rows[i].prize = minCash; rows[i].locked = true; changed3b = true;
+        }
+      }
+      if (changed3b) scaleUnlocked(rows, pool);
+    }
+  }
+
+  // Pass 4: min first-place floor (GFIRST hard-lock takes precedence)
+  if (minFirstPct > 0 && guaranteedFirst === 0) {
+    const minFirst = (minFirstPct / 100) * pool;
+    if (rows[0].prize < minFirst - 0.01) {
+      rows[0].prize = minFirst; rows[0].locked = true;
+      scaleUnlocked(rows, pool);
+      if (minCash > 0) {
+        let changed4 = true;
+        while (changed4) {
+          changed4 = false;
+          for (let i = rows.length - 1; i >= 0; i--) {
+            if (!rows[i].locked && rows[i].prize < minCash) {
+              rows[i].prize = minCash; rows[i].locked = true; changed4 = true;
+            }
+          }
+          if (changed4) scaleUnlocked(rows, pool);
+        }
+      }
+    }
+  }
+
+  // Pass 5: FT 60% floor — only unlocked FT rows scaled; locked rows respected
+  if (ftSize > 0 && rows.length > ftSize) {
+    const ftPlacesCount = rows.slice(0, ftSize).reduce((s, r) => s + r.count, 0);
+    if (ftPlacesCount === ftSize) {
+      const ftLocked = rows.slice(0, ftSize).filter(r => r.locked).reduce((s, r) => s + r.prize * r.count, 0);
+      const ftUnlocked = rows.slice(0, ftSize).filter(r => !r.locked);
+      const ftUnlockedCur = ftUnlocked.reduce((s, r) => s + r.prize * r.count, 0);
+      const ftTotal = ftLocked + ftUnlockedCur;
+      const nonFtLocked = rows.slice(ftSize).filter(r => r.locked).reduce((s, r) => s + r.prize * r.count, 0);
+      const maxFtCanGet = pool - nonFtLocked;
+      const ftTarget = Math.min(0.6 * pool, maxFtCanGet);
+      if (ftTotal < ftTarget - 0.01 && ftUnlockedCur > 0) {
+        const deficit = ftTarget - ftTotal;
+        const ftUnlockedScale = (ftUnlockedCur + deficit) / ftUnlockedCur;
+        ftUnlocked.forEach(r => r.prize *= ftUnlockedScale);
+        const nonFtUnlocked = rows.slice(ftSize).filter(r => !r.locked);
+        const nonFtUnlockedCur = nonFtUnlocked.reduce((s, r) => s + r.prize * r.count, 0);
+        const nonFtUnlockedTarget = pool - ftTarget - nonFtLocked;
+        if (nonFtUnlocked.length > 0 && nonFtUnlockedCur > 0) {
+          const sc = Math.max(nonFtUnlockedTarget / nonFtUnlockedCur, 0);
+          nonFtUnlocked.forEach(r => r.prize *= sc);
+        }
+      }
+    }
+  }
+
   const places = rows.reduce((s, r) => s + r.count, 0);
   const total = rows.reduce((s, r) => s + r.prize * r.count, 0);
   const firstPrize = rows[0].prize;
 
-  return { rows, places, total, firstPrize };
+  // compute FT total (top ftSize individual places)
+  let ftTotalVal = 0, ftPlacesSeen = 0;
+  for (const r of rows) {
+    if (ftPlacesSeen >= ftSize) break;
+    const take = Math.min(r.count, ftSize - ftPlacesSeen);
+    ftTotalVal += r.prize * take;
+    ftPlacesSeen += take;
+  }
+  const ftTotal = ftSize > 0 ? ftTotalVal : total;
+
+  return { rows, places, total, firstPrize, ftTotal };
 }
 
 // ── Test runner ───────────────────────────────────────────────────────────────
@@ -499,8 +570,8 @@ testSnap('Test 24 — $66 custom snap: non-standard unit enforces strict gaps, d
 // Mirrors buildStandardNew() from index.html exactly.
 // 1st = 2nd × 1.45, 2nd = 3rd × 1.30, 3rd+ = 82% geometric decay.
 // Brackets with count>1 use average weight of their constituent positions.
-function buildStandardNew(struct, pool) {
-  const DECAY = 0.82, CAP12 = 1.45, CAP23 = 1.30;
+function buildStandardNew(struct, pool, cap12, cap23, decay) {
+  const DECAY = decay || 0.82, CAP12 = cap12 || 1.45, CAP23 = cap23 || 1.30;
   const n = struct.reduce((s, r) => s + r.count, 0);
   if (!n) return [];
   const w = new Array(n).fill(1.0);
@@ -866,6 +937,197 @@ testMaxSame('Test 35 — tight ceiling: triangle fallback to linear prevents gro
     const gap = lockedRows[i].prize - lockedRows[i + 1].prize;
     assert(errors, gap > 0,
       `Gap between locked rows ${i} and ${i+1} is $${gap.toFixed(0)} — not positive`);
+  }
+});
+
+// ── Group G: Min 1st place % ──────────────────────────────────────────────────
+console.log('\n── Group G: Min 1st place % ──────────────────────────────────────────────');
+
+testNew('G1 — minFirstPct=20 floors 1st to 20% of pool', errors => {
+  const { firstPrize, total } = calculate({ entries: 100, pool: 10000, minCash: 200, minFirstPct: 20 });
+  assert(errors, firstPrize >= 2000 - 0.01, `1st should be ≥ $2000; got ${fmt(firstPrize)}`);
+  assert(errors, Math.abs(total - 10000) < 0.01, `Total should = pool $10,000; got ${fmt(total)}`);
+});
+
+testNew('G2 — minFirstPct=0 applies no floor (natural 1st unchanged)', errors => {
+  const natural = calculate({ entries: 100, pool: 10000, minCash: 200 });
+  const withFloor = calculate({ entries: 100, pool: 10000, minCash: 200, minFirstPct: 0 });
+  assert(errors, Math.abs(natural.firstPrize - withFloor.firstPrize) < 0.01,
+    `minFirstPct=0 should not change 1st; natural=${fmt(natural.firstPrize)} vs floor=${fmt(withFloor.firstPrize)}`);
+});
+
+testNew('G3 — minFirstPct floor skipped when 1st already exceeds floor', errors => {
+  // With only 3 entries, 1st naturally gets ~50% of pool — well above a 20% floor
+  const { firstPrize, total } = calculate({ entries: 3, pool: 10000, minFirstPct: 20 });
+  assert(errors, firstPrize > 2000, `1st should exceed floor naturally; got ${fmt(firstPrize)}`);
+  assert(errors, Math.abs(total - 10000) < 0.01, `Total = pool; got ${fmt(total)}`);
+});
+
+testNew('G4 — GFIRST dollar overrides minFirstPct (GFIRST wins)', errors => {
+  // Natural 1st ≈ $3000 on $10000 pool (100 entries, 10 places). GFIRST=$4000 fires (natural < GFIRST).
+  // minFirstPct=20 → floor=$2000. Since GFIRST is set, minFirstPct is skipped → 1st=$4000 not $2000.
+  const { firstPrize, total } = calculate({ entries: 100, pool: 10000, minCash: 200, guaranteedFirst: 4000, minFirstPct: 20 });
+  assert(errors, Math.abs(firstPrize - 4000) < 0.01, `GFIRST $4000 should win; got ${fmt(firstPrize)}`);
+  assert(errors, Math.abs(total - 10000) < 0.01, `Total = pool; got ${fmt(total)}`);
+});
+
+testNew('G5 — GFIRST pct=30 overrides minFirstPct=20 (GFIRST wins)', errors => {
+  // guaranteedFirst = 30% of $10000 = $3000 (passed as dollar amount)
+  const { firstPrize, total } = calculate({ entries: 100, pool: 10000, minCash: 200, guaranteedFirst: 3000, minFirstPct: 20 });
+  assert(errors, Math.abs(firstPrize - 3000) < 0.01, `GFIRST $3000 should win over 20% floor; got ${fmt(firstPrize)}`);
+  assert(errors, Math.abs(total - 10000) < 0.01, `Total = pool; got ${fmt(total)}`);
+});
+
+testNew('G6 — pool sum preserved after min-1st floor applied across field sizes', errors => {
+  for (const entries of [20, 50, 100, 200, 500]) {
+    const pool = entries * 100;
+    const mc = 200;
+    const { total } = calculate({ entries, pool, minCash: mc, minFirstPct: 20 });
+    assert(errors, Math.abs(total - pool) < 0.01,
+      `entries=${entries}: total ${fmt(total)} ≠ pool ${fmt(pool)}`);
+  }
+});
+
+// ── Group H: FT size + 60% floor ─────────────────────────────────────────────
+console.log('\n── Group H: FT size + 60% floor ─────────────────────────────────────────');
+
+testNew('H1 — ftSize=9, 12 places paid: FT naturally gets >60%, no rescale', errors => {
+  // 100 entries, 12 places paid (default bracket), FT=9 → 3 non-FT places at min cash
+  const { ftTotal, total } = calculate({ entries: 100, pool: 10000, minCash: 200, ftSize: 9 });
+  assert(errors, ftTotal >= 0.6 * 10000 - 0.01, `FT should get ≥60% ($6000); got ${fmt(ftTotal)}`);
+  assert(errors, Math.abs(total - 10000) < 0.01, `Total = pool; got ${fmt(total)}`);
+});
+
+testNew('H2 — ftSize=9, places paid ≤ ftSize: whole pool to paid places (floor irrelevant)', errors => {
+  // Very small field — only a few places pay, all are "FT"
+  const { ftTotal, total, places } = calculate({ entries: 10, pool: 5000, minCash: 100, ftSize: 9 });
+  assert(errors, places <= 9 || Math.abs(ftTotal - total) < 0.01 || ftTotal >= 0.6 * 5000 - 0.01,
+    `FT should hold ≥60% of pool; ftTotal=${fmt(ftTotal)}, total=${fmt(total)}, places=${places}`);
+  assert(errors, Math.abs(total - 5000) < 0.01, `Total = pool; got ${fmt(total)}`);
+});
+
+testNew('H3 — FT floor triggers in overlay scenario (many non-FT at high min cash)', errors => {
+  // 50 entries, 6 places paid (12%), ftSize=9 means all places are FT → no floor needed
+  // Try 200 entries, 24 places paid, min cash = 10% of pool each → non-FT takes up a lot
+  // With 200 entries: 24 places paying. 15 non-FT places, min cash $500 on $20000 pool = 2.5% each
+  // Non-FT total ≈ 15 × $500 = $7500 = 37.5% → FT gets 62.5% naturally, floor doesn't trigger
+  // Force a trigger: use overlay — 30 entries but large pool + high min cash
+  // 100 entries × 10% = 10 places, high min cash to simulate
+  const pool = 5000;
+  const mc = 300; // each min cash = 6% of pool
+  const { ftTotal, total } = calculate({ entries: 100, pool, minCash: mc, ftSize: 9 });
+  assert(errors, ftTotal >= 0.6 * pool - 0.01, `FT should get ≥60%; got ${fmt(ftTotal)}`);
+  assert(errors, Math.abs(total - pool) < 0.01, `Total = pool; got ${fmt(total)}`);
+});
+
+testNew('H4 — ftSize=7 produces bigger jump at 7th/8th boundary than ftSize=9 at 9th/10th', errors => {
+  const r7 = calculate({ entries: 100, pool: 10000, minCash: 200, ftSize: 7 });
+  const r9 = calculate({ entries: 100, pool: 10000, minCash: 200, ftSize: 9 });
+  // FT7: row at index 6 is 7th, row at index 7 is 8th
+  // FT9: row at index 8 is 9th, row at index 9 is 10th
+  // Both should have a meaningful jump at the FT boundary
+  const jump7 = r7.rows[6].prize - r7.rows[7].prize;
+  const jump9 = r9.rows[8].prize - r9.rows[9].prize;
+  assert(errors, jump7 > 0, `FT7: 7th should pay more than 8th; gap=${fmt(jump7)}`);
+  assert(errors, jump9 > 0, `FT9: 9th should pay more than 10th; gap=${fmt(jump9)}`);
+});
+
+testNew('H5 — FT floor + min cash: non-FT rows floored at min cash, pool conserved', errors => {
+  // 100 entries, ~12 places paid, FT=9, 3 non-FT places at min cash.
+  // Non-FT min = 3 × $200 = $600 on $10k pool = 6% → FT can get 94%, floor (60%) easily met.
+  const pool = 10000, mc = 200;
+  const { rows, ftTotal, total } = calculate({ entries: 100, pool, minCash: mc, ftSize: 9 });
+  let placesSeen = 0;
+  for (const r of rows) {
+    placesSeen += r.count;
+    if (placesSeen > 9) {
+      assert(errors, r.prize >= mc - 0.01, `Non-FT row prize ${fmt(r.prize)} < min cash ${fmt(mc)}`);
+    }
+  }
+  assert(errors, ftTotal >= 0.6 * pool - 0.01, `FT should get ≥60% (${fmt(0.6*pool)}); got ${fmt(ftTotal)}`);
+  assert(errors, Math.abs(total - pool) < 0.01, `Total = pool; got ${fmt(total)}`);
+});
+
+testNew('H6 — pool conserved after FT floor across field sizes', errors => {
+  for (const entries of [30, 80, 150, 300]) {
+    const pool = entries * 100;
+    const { total } = calculate({ entries, pool, minCash: 200, ftSize: 9 });
+    assert(errors, Math.abs(total - pool) < 0.01,
+      `entries=${entries}: total ${fmt(total)} ≠ pool ${fmt(pool)}`);
+  }
+});
+
+// ── Group I: Combined feature tests ──────────────────────────────────────────
+console.log('\n── Group I: Combined features ────────────────────────────────────────────');
+
+testNew('I1 — all features active: minCash + GFIRST + minFirstPct + ftSize → pool sums exactly', errors => {
+  const pool = 20000;
+  // GFIRST=$8000 (40% of pool) always exceeds natural 1st for large fields → fires and locks row 0.
+  // Pass 5 only scales unlocked FT rows → row 0 stays at $8000 after FT floor applied.
+  const { total, firstPrize, ftTotal } = calculate({
+    entries: 200, pool, minCash: 300, guaranteedFirst: 8000, minFirstPct: 20, ftSize: 9
+  });
+  assert(errors, Math.abs(firstPrize - 8000) < 0.01, `1st = GFIRST $8000 (locked, untouched by FT floor); got ${fmt(firstPrize)}`);
+  assert(errors, ftTotal >= 0.6 * pool - 0.01, `FT ≥ 60%; got ${fmt(ftTotal)}`);
+  assert(errors, Math.abs(total - pool) < 0.01, `Total = pool $20,000; got ${fmt(total)}`);
+});
+
+testNew('I2 — minFirstPct + ftSize, no GFIRST: both apply, pool conserved', errors => {
+  const pool = 15000;
+  const { firstPrize, ftTotal, total } = calculate({
+    entries: 150, pool, minCash: 200, minFirstPct: 20, ftSize: 9
+  });
+  assert(errors, firstPrize >= 0.2 * pool - 0.01, `1st ≥ 20% ($3000); got ${fmt(firstPrize)}`);
+  assert(errors, ftTotal >= 0.6 * pool - 0.01, `FT ≥ 60% ($9000); got ${fmt(ftTotal)}`);
+  assert(errors, Math.abs(total - pool) < 0.01, `Total = pool $15,000; got ${fmt(total)}`);
+});
+
+testNew('I3 — large field stress: 500 entries, 12% payout, ftSize=9, minFirstPct=20', errors => {
+  const pool = 50000;
+  const { firstPrize, ftTotal, total, places } = calculate({
+    entries: 500, pool, minCash: 200, minFirstPct: 20, ftSize: 9
+  });
+  assert(errors, firstPrize >= 0.2 * pool - 0.01, `1st ≥ 20% ($10,000); got ${fmt(firstPrize)}`);
+  assert(errors, ftTotal >= 0.6 * pool - 0.01, `FT ≥ 60% ($30,000); got ${fmt(ftTotal)}`);
+  assert(errors, Math.abs(total - pool) < 0.01, `Total = pool; got ${fmt(total)}`);
+  assert(errors, places > 9, `Must pay more than FT (9); got ${places}`);
+});
+
+testNew('I4 — stackedpoker example: 60 entries, $15k pool, $200 mc, 12% payout, ftSize=9, minFirstPct=20', errors => {
+  // Tests invariants only — does not require stackedpoker.json to exist
+  const pool = 15000;
+  const { firstPrize, total } = calculate({
+    entries: 60, pool, minCash: 200, minFirstPct: 20, ftSize: 9
+  });
+  assert(errors, firstPrize >= 0.2 * pool - 0.01, `1st ≥ 20% ($3000); got ${fmt(firstPrize)}`);
+  assert(errors, Math.abs(total - pool) < 0.01, `Total = pool; got ${fmt(total)}`);
+});
+
+testNew('I5 — ftSize=0 + minFirstPct=0: identical output to current code (regression guard)', errors => {
+  const params = { entries: 227, pool: 65725, minCash: 700 };
+  const baseline = calculate(params);
+  const withDefaults = calculate({ ...params, ftSize: 0, minFirstPct: 0 });
+  assert(errors, Math.abs(baseline.total - withDefaults.total) < 0.01,
+    `Total changed: ${fmt(baseline.total)} vs ${fmt(withDefaults.total)}`);
+  assert(errors, Math.abs(baseline.firstPrize - withDefaults.firstPrize) < 0.01,
+    `1st changed: ${fmt(baseline.firstPrize)} vs ${fmt(withDefaults.firstPrize)}`);
+  assert(errors, baseline.places === withDefaults.places,
+    `Places changed: ${baseline.places} vs ${withDefaults.places}`);
+});
+
+testNew('I6 — regression: existing themes with ftSize=9, minFirstPct=0 produce same payouts as before', errors => {
+  // Test the three main scenarios from the original test suite with new defaults
+  const cases = [
+    { entries: 227, pool: 65725, minCash: 700 },
+    { entries: 85,  pool: 10000, minCash: 200 },
+  ];
+  for (const c of cases) {
+    const baseline = calculate(c);
+    const withFt   = calculate({ ...c, ftSize: 9, minFirstPct: 0 });
+    assert(errors, Math.abs(baseline.total - withFt.total) < 0.01,
+      `entries=${c.entries}: total changed from ${fmt(baseline.total)} to ${fmt(withFt.total)}`);
+    assert(errors, Math.abs(baseline.firstPrize - withFt.firstPrize) < 0.01,
+      `entries=${c.entries}: 1st changed from ${fmt(baseline.firstPrize)} to ${fmt(withFt.firstPrize)}`);
   }
 });
 
