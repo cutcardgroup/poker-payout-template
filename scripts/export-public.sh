@@ -337,11 +337,14 @@ cat > "$PUBLIC_DIR/themes/example.json" << 'THEME_EOF'
     "dark":   "#0a0a0a",
     "card":   "#111a14",
     "card2":  "#0d1810",
+    "text":   "#e8ead8",
+    "dim":    "#8a9b80",
     "border": "#2a4030"
   },
   "payoutTable": [
-    { "min": 1,  "max": 9,  "rows": [["1st",80,1],["2nd",20,1]] },
-    { "min": 10, "max": 30, "rows": [["1st",50,1],["2nd",30,1],["3rd",20,1]] }
+    { "min": 1,   "max": 9,    "rows": [["1st",80,1],["2nd",20,1]] },
+    { "min": 10,  "max": 30,   "rows": [["1st",50,1],["2nd",30,1],["3rd",20,1]] },
+    { "min": 31,  "max": 9999, "rows": [["1st",40,1],["2nd",25,1],["3rd",15,1],["4th-5th",10,2]] }
   ]
 }
 THEME_EOF
