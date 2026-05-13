@@ -18,7 +18,7 @@ Please do **not** open a public GitHub issue for security reports.
 
 In scope:
 
-- `*.cutcardgroup.au` and `*.pokerpayouts.au` (Cloudflare Pages deployment of this repo)
+- `payouts.cutcardgroup.au` and `*.payouts.cutcardgroup.au` (Cloudflare Pages deployment of this repo)
 - `_worker.js` Pages Function
 - Static assets served from this repo (`index.html`, `admin.html`, theme JSON, logos)
 

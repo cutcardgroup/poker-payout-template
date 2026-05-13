@@ -152,7 +152,7 @@ export default {
 
     // Wildcard *.yourdomain.com → subdomain becomes club key
     // Uncomment and update the suffix below:
-    // const WILDCARD_SUFFIX = '.pokerpayouts.au';
+    // const WILDCARD_SUFFIX = '.payouts.yourdomain.com';
     // if (!club && hostname.endsWith(WILDCARD_SUFFIX)) {
     //   club = hostname.slice(0, -WILDCARD_SUFFIX.length).split('.').pop() || null;
     // }
