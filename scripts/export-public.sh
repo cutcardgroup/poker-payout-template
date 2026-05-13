@@ -48,19 +48,31 @@ cat > "$PUBLIC_DIR/_worker.js" << 'WORKER_EOF'
  * Maps hostnames → club theme keys by appending ?club= to the URL.
  * Update HOSTNAME_MAP with your own domains.
  *
- * /admin.html is protected by HTTP Basic Auth — change these credentials.
+ * /admin.html is protected by HTTP Basic Auth.
+ * Set ADMIN_USER and ADMIN_PASSWORD in Cloudflare Pages → Settings →
+ * Environment variables (encrypted). If unset, /admin.html returns 401
+ * for everyone (fail-closed).
  */
 
 // ── Admin Basic Auth ────────────────────────────────────────────────────────
-const ADMIN_USER = 'example';
-const ADMIN_PASS = 'changeme';
 const ADMIN_PATHS = ['/admin.html', '/admin'];
 
 function requiresAuth(pathname) {
   return ADMIN_PATHS.some(p => pathname === p || pathname.startsWith(p + '?'));
 }
 
-function isAuthorized(request) {
+function constEq(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function isAuthorized(request, env) {
+  const expectedUser = env.ADMIN_USER;
+  const expectedPass = env.ADMIN_PASSWORD;
+  if (!expectedUser || !expectedPass) return false;
   const auth = request.headers.get('Authorization');
   if (!auth || !auth.startsWith('Basic ')) return false;
   try {
@@ -69,7 +81,7 @@ function isAuthorized(request) {
     if (colon === -1) return false;
     const user = decoded.slice(0, colon);
     const pass = decoded.slice(colon + 1);
-    return user === ADMIN_USER && pass === ADMIN_PASS;
+    return constEq(user, expectedUser) && constEq(pass, expectedPass);
   } catch { return false; }
 }
 
@@ -88,18 +100,53 @@ const HOSTNAME_MAP = {
 
 const STATIC_EXT = /\.(json|png|svg|jpg|jpeg|gif|webp|css|js|ico|txt|xml|woff|woff2|ttf)$/i;
 
+// Apply cache + security headers to HTML responses. Static assets pass
+// through unchanged so they can be cached by CF edge.
+function withSecurityHeaders(response, env) {
+  const sha = (env.CF_PAGES_COMMIT_SHA || 'dev').slice(0, 7);
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', 'no-cache');
+  headers.set('ETag', `"${sha}"`);
+  headers.set('Content-Security-Policy', [
+    "default-src 'self'",
+    "img-src 'self' data:",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    // static.cloudflareinsights.com hosts the optional Web Analytics beacon.
+    "script-src 'self' https://static.cloudflareinsights.com",
+    "connect-src 'self' https://cloudflareinsights.com",
+    // 'self' allows admin.html to iframe index.html for theme preview.
+    "frame-ancestors 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+  ].join('; '));
+  headers.set('X-Frame-Options', 'SAMEORIGIN');
+  headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  headers.set('Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), interest-cohort=(), ' +
+    'payment=(), usb=(), accelerometer=(), gyroscope=(), magnetometer=()');
+  return new Response(response.body, { status: response.status, headers });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
     // 0. Guard admin page with Basic Auth
     if (requiresAuth(url.pathname)) {
-      if (!isAuthorized(request)) return authChallenge();
+      if (!isAuthorized(request, env)) return authChallenge();
     }
 
+    // 1. Pass static assets straight through (cached by CF edge)
     if (STATIC_EXT.test(url.pathname)) return env.ASSETS.fetch(request);
-    if (url.searchParams.has('club')) return env.ASSETS.fetch(request);
 
+    // 2. If ?club= is already present, serve HTML with security headers
+    if (url.searchParams.has('club')) {
+      return withSecurityHeaders(await env.ASSETS.fetch(request), env);
+    }
+
+    // 3. Determine club from hostname
     const hostname = url.hostname;
     let club = HOSTNAME_MAP[hostname] ?? null;
 
@@ -116,7 +163,7 @@ export default {
       return Response.redirect(redirectUrl.toString(), 302);
     }
 
-    return env.ASSETS.fetch(request);
+    return withSecurityHeaders(await env.ASSETS.fetch(request), env);
   },
 };
 WORKER_EOF
@@ -133,41 +180,38 @@ Fork this repo, add your own themes, and deploy to Cloudflare Pages.
 
 ```
 poker-payout/
-├── index.html          # Calculator — loads theme from ?club= URL param
-├── admin.html          # Admin preview (not linked publicly)
-├── _worker.js          # Cloudflare Pages Function — maps hostnames → club
+├── index.html                 # Calculator markup — loads scripts/payout-engine.js then scripts/app.js
+├── admin.html                 # Admin preview (not linked publicly) — loads scripts/admin.js
+├── _worker.js                 # Cloudflare Pages Function — hostname routing + CSP / security headers
 ├── themes/
-│   ├── default.json    # Default green casino theme
-│   └── example.json    # Example theme stub — copy and rename
-├── logos/              # Operator logos (PNG preferred; SVG placeholder included)
+│   ├── default.json           # Default green casino theme
+│   └── example.json           # Example theme stub — copy and rename
+├── logos/                     # Operator logos (PNG preferred; SVG placeholder included)
 ├── scripts/
-│   ├── export-public.sh
-│   ├── test-payouts.js     # Payout calculation tests (39 cases)
-│   ├── test-bounty.js      # Mystery bounty calculation tests (63 cases)
-│   ├── test-random.js      # Random scenario stress test
-│   └── show-payout.js      # CLI tool — display payout table
+│   ├── payout-engine.js       # Pure math engine (UMD) — shared by browser + Node tests
+│   ├── app.js                 # Calculator runtime: theme loader, render fns, event handlers
+│   ├── admin.js               # Admin preview runtime
+│   ├── test-payouts.js        # Payout calculation tests (58 cases)
+│   ├── test-bounty.js         # Mystery bounty calculation tests (63 cases)
+│   ├── test-browser.js        # JSDOM end-to-end UI smoke (21 assertions)
+│   ├── test-random.js         # Random scenario stress test
+│   ├── show-payout.js         # CLI tool — display payout table
+│   └── export-public.sh
 └── package.json
 ```
 
 ## Quick start
 
 ```bash
+# Install dev dependencies (jsdom + node-fetch for UI smoke; wrangler for deploy)
+npm install
+
 # Local dev (themes require an HTTP server)
-npx serve . -p 3000
+npm run dev          # serves on http://localhost:3000
 
 # With a theme:  http://localhost:3000?club=example
 # Admin preview: http://localhost:3000/admin.html
 ```
-
-## Payout modes
-
-The calculator offers three payout structure modes, selectable via the button strip in the UI:
-
-| Mode | Description |
-|------|-------------|
-| **Standard** | Geometric decay from 3rd place down (rate 0.82). 1st/2nd and 2nd/3rd ratios are fixed at the top (default 1.45× and 1.30×). Ratios are adjustable via the expand toggle. |
-| **Standard (old)** | Classic bracket table lookup — uses the `payoutTable` percentages directly from the theme JSON (or built-in default). |
-| **Curve** | Exponential curve with three presets: Gentle, Medium, Steep. |
 
 ## Adding an operator
 
@@ -224,21 +268,48 @@ Each color key maps to the CSS variable `--<key>` on `:root`.
 
 ## Testing
 
-Both test suites mirror calculation logic from `index.html` and must pass before every commit:
+Two suites. Both pull math from `scripts/payout-engine.js` — the single source of truth shared with `index.html`. No copy/paste mirrors.
 
 ```bash
-npm test   # runs test-payouts.js + test-bounty.js
+npm test          # pure-math suites — run every commit (~1s)
+npm run test:ui   # JSDOM end-to-end smoke — run when touching UI plumbing (~10s)
 ```
 
-`test-payouts.js` — 39 tests: bracket selection, pool conservation, min-cash locking, guaranteed first, float precision, snap gap-inversion, Standard curve structure, and theme JSON validation.
+`test-payouts.js` — 58 tests: bracket selection, pool conservation, min-cash locking, guaranteed first, float precision, snap gap-inversion, Standard curve structure, max-same-prize stepping, FT 60% floor, min 1st place %, combined-feature scenarios, and theme JSON validation.
 
 `test-bounty.js` — 63 tests: mystery bounty envelope distribution (`buildFlat`, `buildTiered`, `buildCustom`), monotonicity, min-bounty floor, waterfall remainder, and edge cases.
+
+`test-browser.js` — 21 assertions across 9 cases: golden payout cases driven through the real DOM, rounding toggle, in-table prize edit via event delegation, tab switch, MB tiered calc, MB tier add/remove via `data-action`, admin button bindings. Self-spawns a dev server on :3100.
+
+Run `npm run test:ui` when changes touch:
+- `index.html` / `admin.html` markup (esp. `data-*` attrs, ids, `<script src>` paths)
+- `scripts/app.js` / `scripts/admin.js` (handlers, render fns, `setupEventHandlers`)
+- `_worker.js` CSP or static asset routing
+
+Skip `test:ui` for math-only changes (covered by `npm test`).
 
 ## Deploy to Cloudflare Pages
 
 1. Connect this repo to a Cloudflare Pages project (no build command needed)
 2. `_worker.js` is detected automatically
-3. Add your custom domains under **Custom domains** in the Pages dashboard
+3. **Set encrypted env vars in Pages → Settings → Environment variables:**
+   - `ADMIN_USER` — username for Basic Auth on `/admin.html`
+   - `ADMIN_PASSWORD` — password (strong, randomly generated)
+
+   If these aren't set, `/admin.html` returns 401 for everyone (fail-closed).
+4. Add your custom domains under **Custom domains** in the Pages dashboard
+
+### Hardening already in place
+
+- HTTP Basic Auth on `/admin.html` (env-var creds, constant-time compare)
+- Content-Security-Policy (script-src `'self'` only — no `'unsafe-inline'`)
+- HSTS, X-Frame-Options SAMEORIGIN, Permissions-Policy
+- `?club=` URL param whitelisted to `[a-z0-9_-]{1,32}` client-side
+- Theme `logo` URL restricted to same-origin `logos/`/`themes/` paths
+
+For brute-force protection on `/admin*`, add a Cloudflare WAF rate-limit
+rule (~10 req/min/IP). Not required by the code — it's an operational
+hardening step.
 README_EOF
 
 # ── Themes: copy only default; add example stubs ───────────────────────────
@@ -294,12 +365,20 @@ touch "$PUBLIC_DIR/logos/.gitkeep"
 
 # ── Scripts ─────────────────────────────────────────────────────────────────
 mkdir -p "$PUBLIC_DIR/scripts"
-cp "$PRIVATE_DIR/scripts/export-public.sh" "$PUBLIC_DIR/scripts/export-public.sh"
-cp "$PRIVATE_DIR/scripts/test-payouts.js"  "$PUBLIC_DIR/scripts/test-payouts.js"
-cp "$PRIVATE_DIR/scripts/test-bounty.js"   "$PUBLIC_DIR/scripts/test-bounty.js"
-cp "$PRIVATE_DIR/scripts/show-payout.js"   "$PUBLIC_DIR/scripts/show-payout.js"
-cp "$PRIVATE_DIR/scripts/test-random.js"   "$PUBLIC_DIR/scripts/test-random.js"
+cp "$PRIVATE_DIR/scripts/export-public.sh"  "$PUBLIC_DIR/scripts/export-public.sh"
+cp "$PRIVATE_DIR/scripts/payout-engine.js"  "$PUBLIC_DIR/scripts/payout-engine.js"
+cp "$PRIVATE_DIR/scripts/app.js"            "$PUBLIC_DIR/scripts/app.js"
+cp "$PRIVATE_DIR/scripts/admin.js"          "$PUBLIC_DIR/scripts/admin.js"
+cp "$PRIVATE_DIR/scripts/test-payouts.js"   "$PUBLIC_DIR/scripts/test-payouts.js"
+cp "$PRIVATE_DIR/scripts/test-bounty.js"    "$PUBLIC_DIR/scripts/test-bounty.js"
+cp "$PRIVATE_DIR/scripts/test-browser.js"   "$PUBLIC_DIR/scripts/test-browser.js"
+cp "$PRIVATE_DIR/scripts/show-payout.js"    "$PUBLIC_DIR/scripts/show-payout.js"
+cp "$PRIVATE_DIR/scripts/test-random.js"    "$PUBLIC_DIR/scripts/test-random.js"
 chmod +x "$PUBLIC_DIR/scripts/export-public.sh"
+# Lock file pins jsdom + node-fetch versions for test:ui
+[ -f "$PRIVATE_DIR/package-lock.json" ] && cp "$PRIVATE_DIR/package-lock.json" "$PUBLIC_DIR/package-lock.json"
+# Optional: SECURITY.md disclosure policy (if present)
+[ -f "$PRIVATE_DIR/SECURITY.md" ] && cp "$PRIVATE_DIR/SECURITY.md" "$PUBLIC_DIR/SECURITY.md"
 
 # ── Commit and push ─────────────────────────────────────────────────────────
 echo "→ Committing..."

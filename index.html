@@ -191,8 +191,8 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
 <div class="wrap">
 
 <div class="tab-strip">
-  <button class="tab-btn active" onclick="switchTab('payout')">♠ Payout Calculator</button>
-  <button class="tab-btn" onclick="switchTab('bounty')">🎯 Mystery Bounty</button>
+  <button class="tab-btn active" data-tab="payout">♠ Payout Calculator</button>
+  <button class="tab-btn" data-tab="bounty">🎯 Mystery Bounty</button>
 </div>
 
 <div id="tab-payout">
@@ -203,18 +203,18 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
 
   <div class="slbl">Core</div>
   <div class="g3">
-    <div><label class="lbl">Total Entries</label><input type="number" id="f-entries" placeholder="e.g. 227" min="1" onchange="updateMaxSameDisplay()"></div>
+    <div><label class="lbl">Total Entries</label><input type="number" id="f-entries" placeholder="e.g. 227" min="1"></div>
     <div><label class="lbl">Prize Pool ($)</label><input type="number" id="f-pool" placeholder="e.g. 65725" min="1"></div>
     <div><label class="lbl">Min Cash ($)</label><input type="number" id="f-mincash" placeholder="e.g. 700" min="0"></div>
   </div>
 
   <div class="slbl">Payout Structure</div>
   <div class="ptog-row" style="margin-bottom:10px;">
-    <button class="ptog active" id="ptog-standard" onclick="setPayoutMode('standard')">Standard</button>
+    <button class="ptog active" id="ptog-standard">Standard</button>
   </div>
 
   <div id="stdnew-params" style="display:block;margin-bottom:10px;">
-    <span id="ratio-summary" onclick="toggleRatios()"
+    <span id="ratio-summary"
       data-tip="Sets the prize gap at the top. 1.45× means 1st wins 45% more than 2nd; 1.30× means 2nd wins 30% more than 3rd. Decay controls how fast prizes drop from 3rd down — higher = flatter mid-field."
       style="font-size:.72rem;color:var(--dim);cursor:pointer;user-select:none;">
       Ratios: <span id="ratio-display">1.45× / 1.30× / 0.82</span> &nbsp;<span style="font-size:.65rem;">▾ adjust</span>
@@ -223,25 +223,22 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
       <div class="g3" style="max-width:420px;">
         <div>
           <label class="lbl">1st / 2nd ratio</label>
-          <input type="number" id="f-cap12" value="1.45" min="1.01" max="3" step="0.01"
-            onchange="updateRatioDisplay();if(ROWS.length)go()">
+          <input type="number" id="f-cap12" value="1.45" min="1.01" max="3" step="0.01">
         </div>
         <div>
           <label class="lbl">2nd / 3rd ratio</label>
-          <input type="number" id="f-cap23" value="1.30" min="1.01" max="3" step="0.01"
-            onchange="updateRatioDisplay();if(ROWS.length)go()">
+          <input type="number" id="f-cap23" value="1.30" min="1.01" max="3" step="0.01">
         </div>
         <div>
           <label class="lbl">Decay (3rd↓)</label>
-          <input type="number" id="f-decay" value="0.82" min="0.50" max="0.99" step="0.01"
-            onchange="updateRatioDisplay();if(ROWS.length)go()">
+          <input type="number" id="f-decay" value="0.82" min="0.50" max="0.99" step="0.01">
         </div>
       </div>
     </div>
   </div>
 
   <div style="margin-bottom:10px;">
-    <span id="maxsame-summary" onclick="toggleMaxSame()"
+    <span id="maxsame-summary"
       data-tip="Limits how many places can share the same prize. Auto-scales with entries: ≤180=3, 181–360=4, 361–540=5, and so on."
       style="font-size:.72rem;color:var(--dim);cursor:pointer;user-select:none;">
       Identical prizes: max <span id="maxsame-display">3</span> &nbsp;<span style="font-size:.65rem;">▾ adjust</span>
@@ -249,8 +246,7 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
     <div id="maxsame-fields" style="display:none;margin-top:8px;">
       <div style="max-width:140px;">
         <label class="lbl">Max same prize</label>
-        <input type="number" id="f-maxsame" value="3" min="1" max="50" step="1"
-          onchange="this.dataset.manual='1';updateMaxSameDisplay();if(ROWS.length)go()">
+        <input type="number" id="f-maxsame" value="3" min="1" max="50" step="1">
       </div>
     </div>
   </div>
@@ -263,7 +259,7 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
     </div>
     <div>
       <label class="lbl">Guaranteed 1st</label>
-      <select id="f-gtype" onchange="toggleG()">
+      <select id="f-gtype">
         <option value="none">None</option>
         <option value="dollar">Dollar Amount ($)</option>
         <option value="pct">% of Pool</option>
@@ -285,31 +281,29 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
 
   <div class="slbl">Rounding</div>
   <div class="rtog-row" id="rtog-row">
-    <button class="rtog active" data-v="0" onclick="setRound(0,this)">No rounding</button>
-    <button class="rtog" data-v="1"  onclick="setRound(1,this)">$1</button>
-    <button class="rtog" data-v="5"  onclick="setRound(5,this)">$5</button>
-    <button class="rtog" data-v="10" onclick="setRound(10,this)">$10</button>
-    <button class="rtog" data-v="25" onclick="setRound(25,this)">$25</button>
-    <button class="rtog" data-v="50" onclick="setRound(50,this)">$50</button>
-    <button class="rtog" data-v="100" onclick="setRound(100,this)">$100</button>
-    <button class="rtog" id="rtog-custom" onclick="toggleCustomRound(this)">Custom</button>
+    <button class="rtog active" data-v="0">No rounding</button>
+    <button class="rtog" data-v="1">$1</button>
+    <button class="rtog" data-v="5">$5</button>
+    <button class="rtog" data-v="10">$10</button>
+    <button class="rtog" data-v="25">$25</button>
+    <button class="rtog" data-v="50">$50</button>
+    <button class="rtog" data-v="100">$100</button>
+    <button class="rtog" id="rtog-custom">Custom</button>
     <input id="custom-round-input" type="number" min="1" step="1"
       placeholder="e.g. 75"
-      style="display:none;width:80px;padding:4px 6px;border:1px solid var(--border);background:var(--card2);color:var(--text);border-radius:4px;font-size:13px;"
-      onkeydown="if(event.key==='Enter')applyCustomRound(this)"
-      onblur="applyCustomRound(this)">
+      style="display:none;width:80px;padding:4px 6px;border:1px solid var(--border);background:var(--card2);color:var(--text);border-radius:4px;font-size:13px;">
   </div>
 
   <div style="margin-top:10px;">
     <label class="expand-tog">
-      <input type="checkbox" id="f-expand" onchange="ROWS.length?(render(),renderFB(),updateStatus()):null">
+      <input type="checkbox" id="f-expand">
       <span>Expand grouped places to individual rows (e.g. show 11th, 12th, 13th separately)</span>
     </label>
   </div>
 
   <div class="btn-row">
-    <button class="btn btn-green" onclick="go()">▶ Calculate Payouts</button>
-    <button class="btn btn-ghost" onclick="go()">↺ Reset</button>
+    <button class="btn btn-green" id="btn-calculate">▶ Calculate Payouts</button>
+    <button class="btn btn-ghost" id="btn-reset">↺ Reset</button>
   </div>
 </div>
 
@@ -344,7 +338,7 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
   <p style="font-size:.74rem;color:var(--dim);margin-bottom:10px;">Ready-to-paste payout announcement.</p>
   <div id="fb-out">Calculate payouts above to generate text.</div>
   <div class="btn-row" style="align-items:center;">
-    <button class="btn btn-gold" onclick="copyFB()">📋 Copy to Clipboard</button>
+    <button class="btn btn-gold" id="btn-copy-fb">📋 Copy to Clipboard</button>
     <span class="toast" id="toast">Copied!</span>
   </div>
 </div>
@@ -358,31 +352,31 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
   <div class="card-title">🎯 Mystery Bounty Setup</div>
 
   <div class="g3">
-    <div><label class="lbl">Bounty Pool ($)</label><input type="number" id="mb-pool" placeholder="e.g. 5000" min="1" oninput="calcMB()"></div>
-    <div><label class="lbl">Envelopes (players ITM)</label><input type="number" id="mb-n" placeholder="e.g. 20" min="1" oninput="calcMB()"></div>
-    <div><label class="lbl">Top Bounty ($) <span style="color:var(--dim);font-family:'Inter',sans-serif;font-size:.65rem;font-weight:400;">optional</span></label><input type="number" id="mb-top" placeholder="e.g. 1000" min="0" oninput="renderTierControls();calcMB()"></div>
+    <div><label class="lbl">Bounty Pool ($)</label><input type="number" id="mb-pool" placeholder="e.g. 5000" min="1"></div>
+    <div><label class="lbl">Envelopes (players ITM)</label><input type="number" id="mb-n" placeholder="e.g. 20" min="1"></div>
+    <div><label class="lbl">Top Bounty ($) <span style="color:var(--dim);font-family:'Inter',sans-serif;font-size:.65rem;font-weight:400;">optional</span></label><input type="number" id="mb-top" placeholder="e.g. 1000" min="0"></div>
   </div>
 
   <div class="g3" style="margin-top:10px;">
-    <div><label class="lbl">Min Bounty ($) <span style="color:var(--dim);font-family:'Inter',sans-serif;font-size:.65rem;font-weight:400;">optional</span></label><input type="number" id="mb-min" placeholder="e.g. 100" min="0" oninput="calcMB()"></div>
-    <div><label class="lbl">$0 Envelopes <span style="color:var(--dim);font-family:'Inter',sans-serif;font-size:.65rem;font-weight:400;">optional</span></label><input type="number" id="mb-zeros" placeholder="0" min="0" value="0" oninput="calcMB()"></div>
+    <div><label class="lbl">Min Bounty ($) <span style="color:var(--dim);font-family:'Inter',sans-serif;font-size:.65rem;font-weight:400;">optional</span></label><input type="number" id="mb-min" placeholder="e.g. 100" min="0"></div>
+    <div><label class="lbl">$0 Envelopes <span style="color:var(--dim);font-family:'Inter',sans-serif;font-size:.65rem;font-weight:400;">optional</span></label><input type="number" id="mb-zeros" placeholder="0" min="0" value="0"></div>
     <div>
       <label class="lbl">Snap ($)</label>
-      <div class="rtog-row">
-        <button class="rtog" data-mbsnap="10" onclick="setMBSnap(10,this)">$10</button>
-        <button class="rtog" data-mbsnap="25" onclick="setMBSnap(25,this)">$25</button>
-        <button class="rtog active" data-mbsnap="50" onclick="setMBSnap(50,this)">$50</button>
-        <button class="rtog" data-mbsnap="100" onclick="setMBSnap(100,this)">$100</button>
+      <div class="rtog-row" id="mb-snap-row">
+        <button class="rtog" data-mbsnap="10">$10</button>
+        <button class="rtog" data-mbsnap="25">$25</button>
+        <button class="rtog active" data-mbsnap="50">$50</button>
+        <button class="rtog" data-mbsnap="100">$100</button>
       </div>
     </div>
   </div>
 
   <div style="margin-top:14px;">
     <div class="slbl">Distribution Mode</div>
-    <div class="mb-mode-row">
-      <button class="mb-mode-btn active" id="mb-mode-tiered" onclick="setMBMode('tiered')">Tiered</button>
-      <button class="mb-mode-btn" id="mb-mode-flat" onclick="setMBMode('flat')">Flat</button>
-      <button class="mb-mode-btn" id="mb-mode-custom" onclick="setMBMode('custom')">Custom</button>
+    <div class="mb-mode-row" id="mb-mode-row">
+      <button class="mb-mode-btn active" id="mb-mode-tiered" data-mbmode="tiered">Tiered</button>
+      <button class="mb-mode-btn" id="mb-mode-flat" data-mbmode="flat">Flat</button>
+      <button class="mb-mode-btn" id="mb-mode-custom" data-mbmode="custom">Custom</button>
     </div>
   </div>
 
@@ -396,7 +390,7 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
   <div id="mb-custom-settings" style="margin-top:14px;display:none;">
     <div class="slbl">Custom Tiers <span style="color:var(--dim);font-family:'Inter',sans-serif;font-size:.65rem;font-weight:400;">— set exact count and prize for each tier</span></div>
     <div style="margin-top:8px;" id="mb-custom-rows"></div>
-    <button class="btn btn-ghost" style="margin-top:6px;font-size:.8rem;padding:6px 12px;" onclick="addMBCustomRow()">+ Add Tier</button>
+    <button class="btn btn-ghost" id="btn-add-mb-custom" style="margin-top:6px;font-size:.8rem;padding:6px 12px;">+ Add Tier</button>
     <div id="mb-custom-validation" style="margin-top:8px;font-size:.75rem;font-family:'Source Code Pro',monospace;"></div>
   </div>
 </div>
@@ -411,1184 +405,7 @@ tfoot td{padding:9px 10px;font-family:'Source Code Pro',monospace;font-weight:60
 
 </div><!-- /wrap -->
 
-<script>
-// ─────────────────────────────────────────────────────────
-// PAYOUT TABLE  (pct = per-place %)
-// ─────────────────────────────────────────────────────────
-// PT is loaded from themes/default.json in loadTheme() — do not hardcode here
-let PT=[], PT_PCT=0;  // PT_PCT>0 → per-placing mode (ceil(entries×PT_PCT/100))
-
-// ─────────────────────────────────────────────────────────
-// STATE
-// ─────────────────────────────────────────────────────────
-let ROWS=[], POOL=0, MINCASH=0, ENTRIES=0, GFIRST=0, SNAP=0, MIN_FIRST_PCT=0, FT_SIZE=0;
-let PAYOUT_MODE='standard';
-let MAX_SAME=3;
-let THEME={};
-
-// ─────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────
-const $=id=>document.getElementById(id);
-const fmt=n=>'$'+n.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});
-
-function ordinal(n){
-  const s=['th','st','nd','rd'], v=n%100;
-  return n+(s[(v-20)%10]||s[v]||s[0]);
-}
-
-function snapRound(n,to){
-  if(!to) return n; // no rounding — keep exact
-  return Math.round(n/to)*to;
-}
-
-// Snap all row prizes and enforce gap-monotonicity:
-// gaps between consecutive places must be non-increasing from top down
-// (bigger jumps near the top, never a larger jump below a smaller one).
-// Works on ROWS (grouped); returns array of snapped prizes indexed by ROWS.
-// Rows with pinSnap=true were manually set by the user — skip enforcement for those.
-function snapDisplay(rows,to){
-  if(!to) return rows.map(r=>r.prize);
-  // pinSnap rows were manually edited — keep exact prize.
-  // Locked rows participate in snap rounding (their prizes are already multiples
-  // of snap since inc=SNAP during calculation, so this is typically a no-op).
-  const s=rows.map(r=>r.pinSnap ? r.prize : (r.locked ? Math.ceil(r.prize/to)*to : Math.round(r.prize/to)*to));
-  // Boundary gap: unlocked rows above locked groups must continue the
-  // accelerating gap pattern. Walk upward from the boundary, each gap
-  // must be at least one snap unit larger than the gap below it.
-  const fl=rows.findIndex(r=>r.locked);
-  if(fl>0){
-    const lockedGaps=[];
-    for(let i=fl;i<rows.length-1;i++){
-      if(rows[i].locked&&rows[i+1].locked) lockedGaps.push(s[i]-s[i+1]);
-    }
-    if(lockedGaps.length>0){
-      let reqGap=Math.max(...lockedGaps)+to;
-      for(let i=fl-1;i>=0;i--){
-        if(rows[i].pinSnap) break;
-        const curGap=s[i]-s[i+1];
-        if(curGap>=reqGap) break;
-        const needed=Math.ceil((reqGap-curGap)/to)*to;
-        s[i]+=needed;
-        reqGap+=to;
-      }
-    }
-  }
-  // Strict gap enforcement: each gap must be strictly smaller than the gap above.
-  // Skip locked rows — their stepped structure must be preserved.
-  let changed;
-  do {
-    changed=false;
-    for(let i=s.length-2;i>=1;i--){
-      if(rows[i].pinSnap||rows[i].locked) continue;
-      if(s[i]-s[i+1]>=s[i-1]-s[i] && s[i]>s[i+1]){ s[i]-=to; changed=true; }
-    }
-  } while(changed);
-  // Monotonicity: ensure no unlocked row ties or inverts with the row below it
-  // (can happen when ceil rounding pushes locked rows up to meet unlocked rows).
-  if(fl>0){
-    for(let i=fl-1;i>=0;i--){
-      if(rows[i].pinSnap) continue;
-      if(s[i]<=s[i+1]) s[i]=s[i+1]+to;
-    }
-  }
-  // Redistribute drift across unlocked rows (waterfall).  Each row absorbs as
-  // much as it can without dropping below the row below it + one snap unit.
-  // Any remainder cascades to the next unlocked row.
-  const snapTot=rows.reduce((sum,r,i)=>sum+s[i]*r.count,0);
-  let rem=POOL-snapTot;
-  if(rem!==0){
-    for(let i=0;i<s.length&&rem!==0;i++){
-      if(rows[i].pinSnap||rows[i].locked) continue;
-      const floor=i<s.length-1?s[i+1]+to:0;
-      if(rem<0){
-        const canAbsorb=(s[i]-floor)*rows[i].count;
-        if(canAbsorb<=0) continue;
-        if(Math.abs(rem)>canAbsorb){ rem+=canAbsorb; s[i]=floor; }
-        else { s[i]+=rem/rows[i].count; rem=0; }
-      } else { s[i]+=rem/rows[i].count; rem=0; }
-    }
-  }
-  return s;
-}
-
-function getStruct(n){
-  if(PT_PCT>0){
-    const places=Math.ceil(n*PT_PCT/100);
-    const b=PT.find(e=>e[0]===places)||PT[PT.length-1];
-    return b[1].map(r=>({label:r[0],pct:r[1],count:r[2]}));
-  }
-  for(const[lo,hi,rows]of PT)
-    if(n>=lo&&n<=hi) return rows.map(r=>({label:r[0],pct:r[1],count:r[2]}));
-  return PT[PT.length-1][2].map(r=>({label:r[0],pct:r[1],count:r[2]}));
-}
-
-// Override number of paid places AND fix labels on trimmed bands
-function applyOverride(rows, target){
-  const cur=rows.reduce((s,r)=>s+r.count,0);
-  if(target===cur) return rows;
-  if(target<cur){
-    const res=[]; let used=0;
-    for(const r of rows){
-      if(used>=target) break;
-      const take=Math.min(r.count, target-used);
-      let label=r.label;
-      if(take<r.count){
-        // Band is trimmed — recalculate label from actual positions
-        const start=used+1, end=used+take;
-        label=start===end ? ordinal(start) : `${ordinal(start)}-${ordinal(end)}`;
-      }
-      res.push({...r,label,count:take});
-      used+=take;
-    }
-    return res;
-  }
-  // Extend
-  const extra=target-cur, last=rows[rows.length-1];
-  const start=cur+1, end=target;
-  const newLabel=start===end ? ordinal(start) : `${ordinal(start)}-${ordinal(end)}`;
-  return [...rows,{label:newLabel,pct:last.pct,count:extra}];
-}
-
-// Expand grouped bands into individual placing rows
-function expandRows(rows){
-  const out=[]; let pos=0;
-  for(const r of rows){
-    if(r.count===1){ pos++; out.push({...r}); }
-    else {
-      for(let j=0;j<r.count;j++){
-        pos++;
-        out.push({label:ordinal(pos),count:1,prize:r.prize,locked:r.locked});
-      }
-    }
-  }
-  return out;
-}
-
-
-// Standard (new): geometric decay from 3rd down, then apply ratio caps at top.
-// 1st = 2nd × 1.40, 2nd = 3rd × 1.28, 3rd+ = 82% geometric decay.
-// Brackets with count>1 get the average weight of their constituent positions.
-function buildStandardNew(struct,pool,cap12,cap23,decay){
-  const DECAY=decay||0.82, CAP12=cap12||1.45, CAP23=cap23||1.30;
-  const n=struct.reduce((s,r)=>s+r.count,0);
-  if(!n) return [];
-  const w=new Array(n).fill(1.0);
-  for(let i=n-2;i>=2;i--) w[i]=w[i+1]/DECAY;
-  if(n>=3){w[1]=w[2]*CAP23; w[0]=w[1]*CAP12;}
-  else if(n===2){w[0]=w[1]*CAP12;}
-  let pos=0;
-  const rows=struct.map(r=>{
-    let ws=0; for(let j=0;j<r.count;j++) ws+=w[pos+j]; pos+=r.count;
-    return {label:r.label,count:r.count,prize:ws/r.count,locked:false};
-  });
-  const tw=rows.reduce((s,r)=>s+r.prize*r.count,0);
-  rows.forEach(r=>r.prize=r.prize/tw*pool);
-  return rows;
-}
-
-function scaleUnlocked(rows,pool){
-  const lk=rows.filter(r=>r.locked).reduce((s,r)=>s+r.prize*r.count,0);
-  const rem=pool-lk;
-  const ft=rows.filter(r=>!r.locked).reduce((s,r)=>s+r.prize*r.count,0);
-  if(ft>0){const sc=Math.max(rem/ft,0); rows.forEach(r=>{if(!r.locked)r.prize*=sc;});}
-}
-
-// Grand totals using SNAP rounding (with gap-monotonicity enforcement)
-function grandTotal(){ const sv=snapDisplay(ROWS,SNAP); return ROWS.reduce((s,r,i)=>s+sv[i]*r.count,0); }
-function grandPct(){   return ROWS.reduce((s,r)=>s+(r.prize/POOL)*100*r.count,0); }
-// When rounding is active use rounded prizes for % — reflects what actually gets paid
-function displayPct(){ if(!SNAP) return grandPct(); const sv=snapDisplay(ROWS,SNAP); return ROWS.reduce((s,r,i)=>s+(sv[i]/POOL)*100*r.count,0); }
-
-// ─────────────────────────────────────────────────────────
-// UI
-// ─────────────────────────────────────────────────────────
-function toggleG(){
-  const t=$('f-gtype').value;
-  $('g-field').style.display=t==='none'?'none':'block';
-  $('g-lbl').textContent=t==='dollar'?'Amount ($)':'Percentage (%)';
-  $('f-gval').placeholder=t==='dollar'?'e.g. 17500':'e.g. 30';
-}
-
-function setRound(v,el){
-  SNAP=v;
-  document.querySelectorAll('.rtog').forEach(b=>b.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById('custom-round-input').style.display='none';
-  if(ROWS.length) go();
-}
-
-function toggleCustomRound(btn){
-  const inp=document.getElementById('custom-round-input');
-  const visible=inp.style.display!=='none';
-  if(visible){ inp.style.display='none'; return; }
-  inp.style.display='inline-block';
-  inp.value='';
-  inp.focus();
-}
-
-function applyCustomRound(inp){
-  const v=parseInt(inp.value,10);
-  if(!v||v<1){ inp.style.display='none'; return; }
-  SNAP=v;
-  document.querySelectorAll('.rtog').forEach(b=>b.classList.remove('active'));
-  document.getElementById('rtog-custom').classList.add('active');
-  document.getElementById('rtog-custom').textContent='$'+v;
-  inp.style.display='none';
-  if(ROWS.length) go();
-}
-
-function maxSameAuto(e){ return 3+Math.floor(Math.max(0,e-1)/180); }
-
-function toggleMaxSame(){
-  const f=document.getElementById('maxsame-fields');
-  const open=f.style.display!=='none';
-  f.style.display=open?'none':'block';
-  document.getElementById('maxsame-summary').querySelector('span:last-child').textContent=open?'▾ adjust':'▴ adjust';
-}
-
-function updateMaxSameDisplay(){
-  const entries=parseInt($('f-entries').value)||0;
-  const auto=maxSameAuto(entries);
-  const inp=document.getElementById('f-maxsame');
-  if(!inp.dataset.manual) inp.value=auto;
-  MAX_SAME=parseInt(inp.value)||auto;
-  document.getElementById('maxsame-display').textContent=MAX_SAME;
-}
-
-function toggleRatios(){
-  const f=document.getElementById('ratio-fields');
-  const open=f.style.display!=='none';
-  f.style.display=open?'none':'block';
-  const s=document.getElementById('ratio-summary');
-  s.querySelector('span:last-child').textContent=open?'▾ adjust':'▴ adjust';
-}
-
-function updateRatioDisplay(){
-  const c12=parseFloat(document.getElementById('f-cap12').value)||1.45;
-  const c23=parseFloat(document.getElementById('f-cap23').value)||1.30;
-  const dc=parseFloat(document.getElementById('f-decay').value)||0.82;
-  document.getElementById('ratio-display').textContent=c12.toFixed(2)+'× / '+c23.toFixed(2)+'× / '+dc.toFixed(2);
-}
-
-function setPayoutMode(mode){
-  PAYOUT_MODE=mode;
-  document.querySelectorAll('.ptog').forEach(b=>b.classList.remove('active'));
-  document.getElementById('ptog-standard').classList.add('active');
-  document.getElementById('stdnew-params').style.display='block';
-}
-
-
-// ─────────────────────────────────────────────────────────
-// CALCULATE
-// ─────────────────────────────────────────────────────────
-function go(){
-  const entries=parseInt($('f-entries').value);
-  const pool=parseFloat($('f-pool').value);
-  const mc=parseFloat($('f-mincash').value)||0;
-  if(!entries||entries<1||!pool||pool<1){alert('Please enter valid Entries and Prize Pool.');return;}
-
-  const gtype=$('f-gtype').value;
-  const gval=parseFloat($('f-gval').value)||0;
-  const op=parseInt($('f-places').value)||0;
-
-  let gfirst=0;
-  if(gtype==='dollar'&&gval>0) gfirst=gval;
-  if(gtype==='pct'&&gval>0) gfirst=(gval/100)*pool;
-
-  const minFirstPct=parseFloat($('f-min-first-pct').value)||0;
-  const ftSize=parseInt($('f-ft-size').value)||0;
-  POOL=pool; MINCASH=mc; ENTRIES=entries; GFIRST=gfirst; MIN_FIRST_PCT=minFirstPct; FT_SIZE=ftSize;
-  updateMaxSameDisplay();
-  const maxSame=MAX_SAME;
-
-  let struct=getStruct(entries);
-  if(op>0) struct=applyOverride(struct,op);
-
-  const cap12=parseFloat($('f-cap12').value)||1.45;
-  const cap23=parseFloat($('f-cap23').value)||1.30;
-  const decay=parseFloat($('f-decay').value)||0.82;
-  let rows=buildStandardNew(struct,pool,cap12,cap23,decay);
-
-  // Pass 1: iterative min-cash lock.
-  // Lock any row below mc, rescale, repeat until stable.  A single break-on-first pass
-  // misses cases where a marginal unlocked row (barely above mc) falls below mc after
-  // the locked rows absorb their share of the pool.
-  if(mc>0){
-    let changed=true;
-    while(changed){
-      changed=false;
-      for(let i=rows.length-1;i>=0;i--){
-        if(!rows[i].locked&&rows[i].prize<mc){
-          rows[i].prize=mc;rows[i].locked=true;changed=true;
-        }
-      }
-      if(changed) scaleUnlocked(rows,pool);
-    }
-  }
-
-  // Pass 1b: max same prize stepping.
-  // Uses post-scale lowestUnlocked so the cap is accurate (pre-scale prices are too
-  // low and would collapse all stepped groups to mc).
-  if(mc>0){
-    const firstLocked=rows.findIndex(r=>r.locked);
-    if(firstLocked>=0){
-      const lockedCount=rows.slice(firstLocked).reduce((s,r)=>s+r.count,0);
-      const lowestUnlocked=firstLocked>0?rows[firstLocked-1].prize:Infinity;
-      const inc=SNAP>0?SNAP:5;
-      const numGroups=Math.ceil(lockedCount/maxSame);
-      const baseSize=Math.floor(lockedCount/numGroups);
-      const extraGroups=lockedCount%numGroups;
-
-      // Build groups bottom-up with accelerating gaps: each gap is inc larger
-      // than the previous.  gap(g) = g * inc  →  prize(g) = mc + g*(g+1)/2 * inc
-      // Cap at lowestUnlocked-inc; if capped, snap down to nearest inc multiple
-      // so the prize stays on-grid. Linear fallback (prev+inc) only when the
-      // snapped cap equals the previous group (prevents merging).
-      const cap=Math.floor((lowestUnlocked-inc)/inc)*inc;
-      const groups=[];
-      for(let g=0;g<numGroups;g++){
-        const chunkSize=g<extraGroups?baseSize+1:baseSize;
-        let prize;
-        if(g===0){ prize=mc; }
-        else {
-          prize=mc + g*(g+1)/2 * inc;
-          prize=Math.min(prize, cap);
-          if(groups[g-1].prize>=prize) prize=groups[g-1].prize+inc;
-          prize=Math.min(prize, cap);
-          prize=Math.max(prize,mc);
-        }
-        groups.push({count:chunkSize,prize});
-      }
-
-      // Reverse to top-first; merge adjacent groups that share the same prize
-      // (happens when cap is tight — honest to show they share a prize level).
-      groups.reverse();
-      const newLocked=[];
-      for(const grp of groups){
-        const last=newLocked[newLocked.length-1];
-        if(last&&last.prize===grp.prize) last.count+=grp.count;
-        else newLocked.push({label:'',count:grp.count,prize:grp.prize,locked:true});
-      }
-      rows=[...rows.slice(0,firstLocked),...newLocked];
-    }
-  }
-
-  // Pass 1c: label locked rows with ordinal ranges
-  (()=>{
-    let p=1;
-    for(const r of rows){
-      if(r.locked){
-        const s=p, e=p+r.count-1;
-        r.label=s===e?ordinal(s):`${ordinal(s)}-${ordinal(e)}`;
-      }
-      p+=r.count;
-    }
-  })();
-
-  // Pass 2b: re-scale after stepping (locked amounts have changed)
-  scaleUnlocked(rows,pool);
-
-  // Pass 2c: inversion clamp — stepped prizes may exceed adjacent unlocked row after
-  // rescaling (the cap in Pass 1b uses pre-2b unlocked prices; the additional locked
-  // cost pushes unlocked rows below the cap).  Clamp top locked row and cascade
-  // downward so no locked row exceeds the one above it.
-  if(mc>0){
-    const fl=rows.findIndex(r=>r.locked);
-    if(fl>0&&rows[fl].prize>=rows[fl-1].prize){
-      const clampStep=SNAP>0?SNAP:50;
-      rows[fl].prize=Math.max(rows[fl-1].prize-clampStep,mc);
-      for(let i=fl+1;i<rows.length;i++){
-        if(rows[i].locked&&rows[i].prize>rows[i-1].prize) rows[i].prize=rows[i-1].prize;
-      }
-      scaleUnlocked(rows,pool);
-    }
-  }
-
-  // Pass 3: guarantee first (checked AFTER scaling)
-  if(gfirst>0&&rows[0].prize<gfirst){
-    rows[0].prize=gfirst; rows[0].locked=true;
-    scaleUnlocked(rows,pool);
-  }
-
-  // Pass 3b: iterative min cash re-check — guarantee rescaling can push unlocked rows
-  // below mc, and locking those can cascade further (same reason Pass 1 is iterative).
-  if(mc>0){
-    let changed3b=true;
-    while(changed3b){
-      changed3b=false;
-      for(let i=rows.length-1;i>=0;i--){
-        if(!rows[i].locked&&rows[i].prize<mc){
-          rows[i].prize=mc;rows[i].locked=true;changed3b=true;
-        }
-      }
-      if(changed3b) scaleUnlocked(rows,pool);
-    }
-  }
-
-  // Pass 4: min first-place floor (floor only — GFIRST hard-lock takes precedence)
-  if(minFirstPct>0&&gfirst===0){
-    const minFirst=(minFirstPct/100)*pool;
-    if(rows[0].prize<minFirst-0.01){
-      rows[0].prize=minFirst; rows[0].locked=true;
-      scaleUnlocked(rows,pool);
-      if(mc>0){
-        let changed4=true;
-        while(changed4){
-          changed4=false;
-          for(let i=rows.length-1;i>=0;i--){
-            if(!rows[i].locked&&rows[i].prize<mc){
-              rows[i].prize=mc;rows[i].locked=true;changed4=true;
-            }
-          }
-          if(changed4) scaleUnlocked(rows,pool);
-        }
-      }
-    }
-  }
-
-  // Pass 5: FT 60% floor — top ftSize places must collectively receive ≥60% of pool.
-  // Only unlocked FT rows are scaled up; locked rows (GFIRST, min cash) are respected.
-  if(ftSize>0&&rows.length>ftSize){
-    const ftPlacesCount=rows.slice(0,ftSize).reduce((s,r)=>s+r.count,0);
-    if(ftPlacesCount===ftSize){
-      const ftLocked=rows.slice(0,ftSize).filter(r=>r.locked).reduce((s,r)=>s+r.prize*r.count,0);
-      const ftUnlocked=rows.slice(0,ftSize).filter(r=>!r.locked);
-      const ftUnlockedCur=ftUnlocked.reduce((s,r)=>s+r.prize*r.count,0);
-      const ftTotal=ftLocked+ftUnlockedCur;
-      const nonFtLocked=rows.slice(ftSize).filter(r=>r.locked).reduce((s,r)=>s+r.prize*r.count,0);
-      const maxFtCanGet=pool-nonFtLocked;
-      const ftTarget=Math.min(0.6*pool,maxFtCanGet);
-      if(ftTotal<ftTarget-0.01&&ftUnlockedCur>0){
-        const deficit=ftTarget-ftTotal;
-        const ftUnlockedScale=(ftUnlockedCur+deficit)/ftUnlockedCur;
-        ftUnlocked.forEach(r=>r.prize*=ftUnlockedScale);
-        const nonFtUnlocked=rows.slice(ftSize).filter(r=>!r.locked);
-        const nonFtUnlockedCur=nonFtUnlocked.reduce((s,r)=>s+r.prize*r.count,0);
-        const nonFtUnlockedTarget=pool-ftTarget-nonFtLocked;
-        if(nonFtUnlocked.length>0&&nonFtUnlockedCur>0){
-          const sc=Math.max(nonFtUnlockedTarget/nonFtUnlockedCur,0);
-          nonFtUnlocked.forEach(r=>r.prize*=sc);
-        }
-      }
-    }
-  }
-
-  ROWS=rows;
-  render(); renderFB(); updateStatus();
-}
-
-// ─────────────────────────────────────────────────────────
-// LOCK BADGE — tooltip explains why a row is locked
-// ─────────────────────────────────────────────────────────
-function lockBadge(rowIdx, r){
-  let tip;
-  if(rowIdx===0 && GFIRST>0 && r.prize>=GFIRST-0.01){
-    tip=`Guaranteed 1st place minimum of ${fmt(GFIRST)}`;
-  } else if(rowIdx===0 && MIN_FIRST_PCT>0 && GFIRST===0 && r.prize>=(MIN_FIRST_PCT/100)*POOL-0.01){
-    tip=`Min 1st place floor of ${MIN_FIRST_PCT}% (${fmt((MIN_FIRST_PCT/100)*POOL)})`;
-  } else if(MINCASH>0 && r.prize<=MINCASH+0.01){
-    tip=`Min cash floor — prize locked at ${fmt(MINCASH)}`;
-  } else {
-    tip='Manually locked';
-  }
-  return ` <span title="${tip}" style="cursor:help;font-size:.8em;">🔒</span>`;
-}
-
-function floorBadge(rawPrize){
-  const tip=`At min cash via rounding — raw prize was ${fmt(rawPrize)}, which the $${SNAP} snap rounded down to ${fmt(MINCASH)}. Not locked — editing is unrestricted.`;
-  return ` <span title="${tip}" style="cursor:help;font-size:.8em;">🔽</span>`;
-}
-
-// ─────────────────────────────────────────────────────────
-// RENDER TABLE
-// ─────────────────────────────────────────────────────────
-function render(){
-  const expand=$('f-expand').checked;
-  const displayRows=expand ? expandRows(ROWS) : ROWS;
-
-  // Pre-compute monotone-enforced snap values (indexed by ROWS)
-  const snapVals=snapDisplay(ROWS,SNAP);
-  // Helper: map a displayRows index back to its ROWS index
-  function snapOf(i){
-    if(!expand) return snapVals[i];
-    let pos=0;
-    for(let ri=0;ri<ROWS.length;ri++){
-      if(i<pos+ROWS[ri].count) return snapVals[ri];
-      pos+=ROWS[ri].count;
-    }
-    return snapVals[snapVals.length-1];
-  }
-
-  const tot=grandTotal();
-  const totp=displayPct();
-  const pOk=Math.abs(totp-100)<0.01;
-  const exactPool=ROWS.reduce((s,r)=>s+r.prize*r.count,0);
-  const roundedTotal=ROWS.reduce((s,r,i)=>s+snapVals[i]*r.count,0);
-  const drift=roundedTotal-POOL;
-  const driftOk=Math.abs(drift)<0.01;
-
-  // Pre-compute jumps (difference in per-player prize from row below)
-  const jumps=displayRows.map((r,i)=>{
-    if(i>=displayRows.length-1) return null;
-    const thisP=SNAP?snapOf(i):r.prize;
-    const nextP=SNAP?snapOf(i+1):displayRows[i+1].prize;
-    return thisP-nextP;
-  });
-  // Check each jump: unlocked gaps should decrease going down, locked gaps should increase going up
-  const jumpOk=jumps.map((j,i)=>{
-    if(j===null) return null;
-    if(j<-0.01) return false; // inversion — prize below is higher
-    if(i>=jumps.length-1||jumps[i+1]===null) return true; // bottom-most gap, nothing to compare
-    const nextJ=jumps[i+1];
-    if(nextJ===null) return true;
-    return j>nextJ-0.01; // this gap should be >= gap below (strictly for unlocked, or equal OK at boundary)
-  });
-
-  let h=`<table><thead><tr>
-    <th>Position</th>
-    <th class="r">% each</th>
-    <th class="r">Prize each</th>
-    <th class="r">Row total</th>
-    <th class="r">Jump</th>
-  </tr></thead><tbody>`;
-
-  displayRows.forEach((r,i)=>{
-    // Map display row index back to ROWS bracket index + position within bracket
-    let editIdx=i, withinIdx=0;
-    if(expand){
-      let pos=0;
-      for(let ri=0;ri<ROWS.length;ri++){
-        if(i<pos+ROWS[ri].count){ editIdx=ri; withinIdx=i-pos; break; }
-        pos+=ROWS[ri].count;
-      }
-    }
-    // When a bracket has multiple places in expanded view, use the splitting editors
-    const needSplit=expand&&ROWS[editIdx].count>1;
-    const onchgPct  =needSplit?`editPctAt(${editIdx},${withinIdx},this.value)`  :`editPct(${editIdx},this.value)`;
-    const onchgPrize=needSplit?`editPrizeAt(${editIdx},${withinIdx},this.value)`:`editPrize(${editIdx},this.value)`;
-
-    const rawPrize=r.prize;
-    const dispPrize=SNAP?snapOf(i):rawPrize;
-    const isPinned=SNAP&&ROWS[editIdx].pinSnap;
-    const pEach=(rawPrize/POOL*100).toFixed(3);
-    const low=(MINCASH>0&&rawPrize<MINCASH-0.01)
-      ?'<span style="background:var(--red);color:#fff;font-size:.55rem;padding:1px 4px;border-radius:3px;margin-left:3px;">LOW</span>':'';
-    const atSnappedFloor=!r.locked&&MINCASH>0&&SNAP>0&&Math.abs(dispPrize-MINCASH)<0.01&&rawPrize>MINCASH-0.01;
-
-    h+=`<tr>
-      <td class="pos">${r.label}${r.locked?lockBadge(editIdx,r):atSnappedFloor?floorBadge(rawPrize):''}</td>
-      <td class="r"><input class="w75" type="number" step="0.001" value="${pEach}" onchange="${onchgPct}"></td>
-      <td class="r"><input class="w100" type="number" step="${isPinned?1:(SNAP||1)}" value="${dispPrize%1?dispPrize.toFixed(2):dispPrize.toFixed(0)}" onchange="${onchgPrize}">${low}</td>
-      <td class="r rt">${fmt(dispPrize*r.count)}${r.count>1?`<br><span style="font-size:.65rem;color:var(--dim);">×${r.count}</span>`:''}</td>
-      <td class="r" style="font-size:.75rem;color:var(--dim);">${jumps[i]===null?'—':`${fmt(jumps[i])} ${jumpOk[i]?'<span style="color:var(--green3);">✓</span>':'<span style="color:var(--red);">✗</span>'}`}</td>
-    </tr>`;
-  });
-
-  const mOk=Math.abs(tot-POOL)<1;
-  h+=`</tbody><tfoot><tr>
-    <td style="color:var(--dim);font-size:.75rem;">TOTALS</td>
-    <td class="r" style="color:${pOk?'var(--green3)':'var(--red)'};">${totp.toFixed(2)}%</td>
-    <td class="r" style="color:${pOk?'var(--green3)':'var(--red)'};">${pOk?'✓ 100%':'⚠ ≠ 100%'}</td>
-    <td class="r" style="color:${mOk?'var(--green3)':'var(--amber)'};">${fmt(tot)} ${mOk?'✓':'⚠'}</td>
-    <td></td>
-  </tr></tfoot></table>`;
-
-
-  $('tbl-inner').innerHTML=h;
-}
-
-function editPct(i,v){
-  const p=parseFloat(v); if(isNaN(p)||p<0)return;
-  ROWS[i].prize=(p/100)*POOL; ROWS[i].locked=false; ROWS[i].pinSnap=!!SNAP;
-  render(); renderFB(); updateStatus();
-}
-function editPrize(i,v){
-  const p=parseFloat(v); if(isNaN(p)||p<0)return;
-  ROWS[i].prize=p; ROWS[i].locked=false; ROWS[i].pinSnap=!!SNAP;
-  render(); renderFB(); updateStatus();
-}
-
-// Edit a specific place within a grouped bracket (expanded view).
-// Splits the bracket into up to 3 slices: before / edited / after.
-function editPrizeAt(bracketIdx,withinIdx,val){
-  const p=parseFloat(val); if(isNaN(p)||p<0)return;
-  const b=ROWS[bracketIdx];
-  if(b.count===1){ b.prize=p; b.locked=false; b.pinSnap=!!SNAP; }
-  else {
-    // 1-indexed position of the first place in this bracket
-    let startPos=1;
-    for(let x=0;x<bracketIdx;x++) startPos+=ROWS[x].count;
-    const split=[];
-    // Slice before the edited place
-    if(withinIdx>0){
-      const s=startPos, e=startPos+withinIdx-1;
-      split.push({label:withinIdx===1?ordinal(s):`${ordinal(s)}-${ordinal(e)}`,count:withinIdx,prize:b.prize,locked:b.locked});
-    }
-    // The individually edited place
-    split.push({label:ordinal(startPos+withinIdx),count:1,prize:p,locked:false,pinSnap:!!SNAP});
-    // Slice after the edited place
-    const afterCount=b.count-withinIdx-1;
-    if(afterCount>0){
-      const s=startPos+withinIdx+1, e=startPos+b.count-1;
-      split.push({label:afterCount===1?ordinal(s):`${ordinal(s)}-${ordinal(e)}`,count:afterCount,prize:b.prize,locked:b.locked});
-    }
-    ROWS.splice(bracketIdx,1,...split);
-  }
-  render(); renderFB(); updateStatus();
-}
-function editPctAt(bracketIdx,withinIdx,val){
-  const p=parseFloat(val); if(isNaN(p)||p<0)return;
-  editPrizeAt(bracketIdx,withinIdx,(p/100)*POOL);
-}
-
-// ─────────────────────────────────────────────────────────
-// STATUS BAR
-// ─────────────────────────────────────────────────────────
-function updateStatus(){
-  $('status-bar').style.display='block';
-  const places=ROWS.reduce((s,r)=>s+r.count,0);
-  const totp=displayPct();
-  const tot=grandTotal();
-  const pOk=Math.abs(totp-100)<0.01;
-  const mOk=Math.abs(tot-POOL)<1;
-
-  $('s-places').textContent=places;
-  $('s-field').textContent=ENTRIES>0?(places/ENTRIES*100).toFixed(1)+'%':'—';
-  $('s-pct').textContent=(pOk?'✓ ':'⚠ ')+totp.toFixed(2)+'%';
-  $('s-pct').className='sv '+(pOk?'ok':'bad');
-  $('s-prize').textContent=(mOk?'✓ ':'⚠ ')+fmt(tot);
-  $('s-prize').className='sv '+(mOk?'ok':'warn');
-
-  const last=ROWS[ROWS.length-1];
-  if(!MINCASH){$('s-min').textContent='Not set';$('s-min').className='sv';}
-  else{
-    const allLocked=ROWS.every(r=>r.locked);
-    if(allLocked){
-      const places=ROWS.reduce((s,r)=>s+r.count,0);
-      const maxMC=Math.floor(POOL/places);
-      $('s-min').textContent=`⚠ Too high — reduce below ${fmt(maxMC)}`;
-      $('s-min').className='sv bad';
-    } else {
-      const ok=last.prize>=MINCASH-0.01;
-      $('s-min').textContent=(ok?'✓ ':'⚠ ')+fmt(snapRound(last.prize,SNAP));
-      $('s-min').className='sv '+(ok?'ok':'bad');
-    }
-  }
-
-  if(GFIRST>0){
-    $('s-g-wrap').style.display='flex';
-    const ok=ROWS[0].prize>=GFIRST-0.01;
-    $('s-g').textContent=(ok?'✓ ':'⚠ ')+fmt(snapRound(ROWS[0].prize,SNAP));
-    $('s-g').className='sv '+(ok?'ok':'bad');
-  } else {
-    $('s-g-wrap').style.display='none';
-  }
-
-  $('s-mode').textContent='Standard';
-
-  if(SNAP){
-    const sv=snapDisplay(ROWS,SNAP);
-    const drift=ROWS.reduce((s,r,i)=>s+sv[i]*r.count,0)-POOL;
-    $('s-round-wrap').style.display='flex';
-    const dOk=Math.abs(drift)<0.01;
-    const sign=drift>=0?'+':'';
-    $('s-round').textContent=(dOk?'✓ ':'⚠ ')+sign+fmt(drift);
-    $('s-round').className='sv '+(Math.abs(drift)<0.01?'ok':'warn');
-  } else {
-    $('s-round-wrap').style.display='none';
-  }
-}
-
-// ─────────────────────────────────────────────────────────
-// FACEBOOK
-// ─────────────────────────────────────────────────────────
-function renderFB(){
-  const expand=$('f-expand').checked;
-  const displayRows=expand ? expandRows(ROWS) : ROWS;
-  const snapVals=snapDisplay(ROWS,SNAP);
-  function fbSnapOf(i){
-    if(!expand) return snapVals[i];
-    let pos=0;
-    for(let ri=0;ri<ROWS.length;ri++){
-      if(i<pos+ROWS[ri].count) return snapVals[ri];
-      pos+=ROWS[ri].count;
-    }
-    return snapVals[snapVals.length-1];
-  }
-  const fbHeader=THEME.fbHeader||'🃏 TOURNAMENT PAYOUT STRUCTURE 🃏';
-  const fbFooter=THEME.fbFooter||'Good luck at the tables! 🎰';
-  const lines=[
-    fbHeader,
-    `Entries: ${ENTRIES}  |  Prize Pool: ${fmt(POOL)}`,
-    `Structure: Standard`,
-    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
-  ];
-  displayRows.forEach((r,i)=>lines.push(`${r.label.padEnd(16)}${fmt(fbSnapOf(i))}`));
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  lines.push(fbFooter);
-  $('fb-out').textContent=lines.join('\n');
-}
-
-function copyFB(){
-  navigator.clipboard.writeText($('fb-out').textContent).then(()=>{
-    $('toast').style.display='inline-block';
-    setTimeout(()=>{$('toast').style.display='none';},2000);
-  });
-}
-
-// ─────────────────────────────────────────────────────────
-// THEME SYSTEM
-// ─────────────────────────────────────────────────────────
-async function loadTheme(){
-  const params=new URLSearchParams(window.location.search);
-  const club=params.get('club')||'default';
-
-  // Fetch both themes in parallel so they can be applied back-to-back
-  // with no intermediate repaint (eliminates flash of default branding).
-  const fetchJson=async url=>{try{const r=await fetch(url);return r.ok?await r.json():null;}catch(_){return null;}};
-  const [defaultTheme,clubTheme]=await Promise.all([
-    fetchJson('themes/default.json'),
-    club!=='default'?fetchJson(`themes/${club}.json`):Promise.resolve(null)
-  ]);
-
-  if(defaultTheme) applyTheme(defaultTheme);
-  if(clubTheme)    applyTheme(clubTheme);
-}
-
-function applyTheme(theme){
-  THEME=theme;
-  const root=document.documentElement;
-
-  // Colors: each key maps directly to --key CSS variable
-  Object.entries(theme.colors||{}).forEach(([k,v])=>{
-    root.style.setProperty(`--${k}`,v);
-  });
-
-  // Logo
-  if(theme.logo){
-    const img=$('hdr-logo');
-    img.src=theme.logo;
-    img.alt=theme.name||'';
-    img.style.display='block';
-    $('hdr-suit').style.display='none';
-  }
-
-  // Operator name
-  if(theme.name){
-    $('hdr-title').textContent=theme.name;
-    document.title=theme.name+' — Payout Calculator';
-  }
-
-  // Example placeholders + default snap
-  if(theme.fontFamily){
-    const existing=document.getElementById('theme-font-link');
-    if(existing) existing.remove();
-    const link=document.createElement('link');
-    link.id='theme-font-link';
-    link.rel='stylesheet';
-    link.href='https://fonts.googleapis.com/css2?family='+encodeURIComponent(theme.fontFamily)+':wght@300;400;500;700&display=swap';
-    document.head.appendChild(link);
-    document.documentElement.style.setProperty('--font-body',`'${theme.fontFamily}'`);
-    document.documentElement.style.setProperty('--font-display',`'${theme.fontFamily}'`);
-  }
-
-  if(theme.examples){
-    const ex=theme.examples;
-    if(ex.entries)  $('f-entries').placeholder='e.g. '+ex.entries;
-    if(ex.pool)     $('f-pool').placeholder='e.g. '+ex.pool;
-    if(ex.minCash)  $('f-mincash').placeholder='e.g. '+ex.minCash;
-    if(ex.ftSize!=null) $('f-ft-size').value=ex.ftSize;
-    if(ex.minFirstPct!=null) $('f-min-first-pct').value=ex.minFirstPct;
-    if(ex.cap12!=null){ $('f-cap12').value=ex.cap12; updateRatioDisplay(); }
-    if(ex.cap23!=null){ $('f-cap23').value=ex.cap23; updateRatioDisplay(); }
-    if(ex.decay!=null){ $('f-decay').value=ex.decay; updateRatioDisplay(); }
-    if(ex.snap!=null){
-      const btn=document.querySelector('.rtog[data-v="'+ex.snap+'"]');
-      if(btn) setRound(ex.snap,btn);
-      else { SNAP=ex.snap; document.querySelectorAll('.rtog').forEach(b=>b.classList.remove('active')); const cb=document.getElementById('rtog-custom'); cb.classList.add('active'); cb.textContent='$'+ex.snap; }
-    }
-  }
-
-  // Custom payout table — two formats:
-  //   range-based:    [{min, max, rows}]  → range lookup by entry count
-  //   per-placing:    [{places, rows}]    → lookup by ceil(entries × payoutPct/100)
-  if(Array.isArray(theme.payoutTable)){
-    if(theme.payoutPct && theme.payoutTable[0]?.places!==undefined){
-      PT_PCT=theme.payoutPct;
-      PT=theme.payoutTable.map(b=>[b.places,b.rows]);
-    }else{
-      PT_PCT=0;
-      PT=theme.payoutTable.map(b=>[b.min,b.max,b.rows]);
-    }
-  }
-}
-
-document.addEventListener('DOMContentLoaded',()=>{
-  loadTheme();
-  initMB();
-});
-
-// ─────────────────────────────────────────────────────────
-// TAB SWITCHING
-// ─────────────────────────────────────────────────────────
-function switchTab(tab){
-  document.getElementById('tab-payout').style.display=tab==='payout'?'':'none';
-  document.getElementById('tab-bounty').style.display=tab==='bounty'?'':'none';
-  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',(tab==='payout'&&i===0)||(tab==='bounty'&&i===1)));
-}
-
-// ─────────────────────────────────────────────────────────
-// MYSTERY BOUNTY STATE
-// ─────────────────────────────────────────────────────────
-let MB_SNAP=50;
-let MB_MODE='tiered';
-const MB_TIER_LABELS=['Top Bounty','Tier 2','Tier 3','Tier 4'];
-let MB_TIERS=[
-  {pct:10,mult:30},
-  {pct:15,mult:12},
-  {pct:25,mult:4},
-  {pct:50,mult:1},
-];
-let MB_CUSTOM=[];
-let MB_POOL=0,MB_N=0,MB_ROWS=[],MB_CONFIG={};
-
-function setMBSnap(v,btn){
-  MB_SNAP=v;
-  document.querySelectorAll('[data-mbsnap]').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  calcMB();
-}
-
-function setMBMode(mode){
-  MB_MODE=mode;
-  document.querySelectorAll('.mb-mode-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('mb-mode-'+mode).classList.add('active');
-  document.getElementById('mb-tiered-settings').style.display=mode==='tiered'?'':'none';
-  document.getElementById('mb-custom-settings').style.display=mode==='custom'?'':'none';
-  calcMB();
-}
-
-// ─────────────────────────────────────────────────────────
-// INIT
-// ─────────────────────────────────────────────────────────
-function initMB(){
-  renderTierControls();
-  if(MB_CUSTOM.length===0) MB_CUSTOM=[{count:'',value:''},{count:'',value:''}];
-  renderCustomControls();
-}
-
-function renderTierControls(){
-  const container=document.getElementById('mb-tier-rows');
-  const lShift=(parseFloat(document.getElementById('mb-top')?.value)||0)>0?1:0;
-  container.innerHTML=MB_TIERS.map((t,i)=>`
-    <div class="mb-tier-row">
-      <span class="mb-tier-lbl">${MB_TIER_LABELS[i+lShift]||'Tier '+(i+1+lShift)}</span>
-      <div><label class="lbl" style="font-size:.6rem;">Weight</label>
-        <input type="number" min="1" max="99" value="${t.pct}" oninput="MB_TIERS[${i}].pct=+this.value;calcMB()"></div>
-      <div><label class="lbl" style="font-size:.6rem;">Multiplier ×</label>
-        <input type="number" min="0.1" step="0.5" value="${t.mult}" oninput="MB_TIERS[${i}].mult=+this.value;calcMB()"></div>
-      <div style="padding-top:18px;">${MB_TIERS.length>2?`<button class="btn btn-ghost" style="padding:4px 8px;font-size:.7rem;" onclick="removeMBTier(${i})">✕</button>`:''}</div>
-    </div>`).join('')+
-    `<button class="btn btn-ghost" style="font-size:.8rem;padding:6px 12px;margin-top:4px;" onclick="addMBTier()">+ Add Tier</button>`;
-}
-
-function addMBTier(){
-  // Add a new smallest tier at the bottom (half the current bottom's multiplier, min 0.5)
-  MB_TIERS.push({pct:10,mult:Math.max(0.5,MB_TIERS[MB_TIERS.length-1].mult/2)});
-  renderTierControls();calcMB();
-}
-function removeMBTier(i){MB_TIERS.splice(i,1);renderTierControls();calcMB();}
-
-function renderCustomControls(){
-  const container=document.getElementById('mb-custom-rows');
-  container.innerHTML=MB_CUSTOM.map((r,i)=>`
-    <div class="mb-custom-row">
-      <div><label class="lbl" style="font-size:.6rem;">Count</label>
-        <input type="number" min="1" value="${r.count}" placeholder="e.g. 10" oninput="MB_CUSTOM[${i}].count=+this.value;calcMB()"></div>
-      <div><label class="lbl" style="font-size:.6rem;">Prize ($)</label>
-        <input type="number" min="0" value="${r.value}" placeholder="e.g. 100" oninput="MB_CUSTOM[${i}].value=+this.value;calcMB()"></div>
-      <div style="padding-top:18px;">${MB_CUSTOM.length>1?`<button class="btn btn-ghost" style="padding:4px 8px;font-size:.7rem;" onclick="removeMBCustomRow(${i})">✕</button>`:''}</div>
-    </div>`).join('');
-}
-function addMBCustomRow(){MB_CUSTOM.push({count:'',value:''});renderCustomControls();calcMB();}
-function removeMBCustomRow(i){MB_CUSTOM.splice(i,1);renderCustomControls();calcMB();}
-
-// ─────────────────────────────────────────────────────────
-// CALCULATION
-// ─────────────────────────────────────────────────────────
-function mbSnap(v,to){if(!to||to<=0)return Math.round(v);return Math.round(v/to)*to;}
-
-function distributeCounts(pcts,n){
-  const total=pcts.reduce((a,b)=>a+b,0);
-  const norm=pcts.map(p=>p/total*n);
-  const floors=norm.map(Math.floor);
-  const deficit=n-floors.reduce((a,b)=>a+b,0);
-  const rems=norm.map((v,i)=>({i,r:v-floors[i]})).sort((a,b)=>b.r-a.r);
-  for(let k=0;k<deficit;k++) floors[rems[k].i]++;
-  return floors;
-}
-
-function buildTiered(pool,n,zeros,topBounty,tiers,snap,minBounty){
-  const results=[];
-  let activeN=n-zeros;
-  let activePool=pool;
-
-  if(topBounty>0){activeN=Math.max(0,activeN-1);activePool=Math.max(0,activePool-topBounty);}
-  if(activeN<=0||activePool<=0){
-    const early=topBounty>0?[{count:1,value:topBounty,isTop:true}]:[];
-    if(zeros>0) early.push({count:zeros,value:0,isZero:true});
-    return early;
-  }
-
-  const counts=distributeCounts(tiers.map(t=>t.pct),activeN);
-  // Solve for base: pool = sum(counts[i] * base * tiers[i].mult)
-  // tiers are stored highest-first: tiers[0]=Top, tiers[last]=Small
-  const weightedSum=counts.reduce((s,c,i)=>s+c*tiers[i].mult,0);
-  if(weightedSum<=0) return [];
-  const base=activePool/weightedSum;
-
-  // Snap each tier value (vals[0]=highest, vals[last]=lowest)
-  const vals=tiers.map(t=>mbSnap(base*t.mult,snap));
-
-  // Enforce strictly decreasing from index 0 downward (reduce lower tiers on ties)
-  for(let i=1;i<tiers.length;i++) if(vals[i]>=vals[i-1]&&snap>0) vals[i]=Math.max(0,vals[i-1]-snap);
-
-  // Apply min bounty floor to bottom tier AFTER monotonicity so it can't be undone
-  const mbFloor=minBounty>0?(snap>0?Math.ceil(minBounty/snap)*snap:minBounty):0;
-  const last=tiers.length-1;
-  if(mbFloor>0&&vals[last]<mbFloor){
-    vals[last]=mbFloor;
-    // Re-enforce descending above the floor (push tiers upward as needed)
-    for(let i=last-1;i>=0;i--) if(vals[i]<=vals[i+1]) vals[i]=vals[i+1]+(snap>0?snap:1);
-  }
-
-  // Distribute remainder top-down, preserving descending monotonicity
-  let snappedTotal=counts.reduce((s,c,i)=>s+c*vals[i],0);
-  let rem=activePool-snappedTotal;
-  for(let j=0;j<vals.length&&rem!==0;j++){
-    const minV=j<last?vals[j+1]+(snap>0?snap:1):mbFloor;
-    const proposed=vals[j]+rem/counts[j];
-    if(proposed>=minV){vals[j]=proposed;rem=0;}
-    else{const canAbsorb=(vals[j]-minV)*counts[j];rem+=canAbsorb;vals[j]=minV;}
-  }
-
-  // Build result array (already highest → lowest since tiers are stored that way)
-  for(let i=0;i<tiers.length;i++){
-    const lShift=topBounty>0?1:0;
-    if(counts[i]>0) results.push({count:counts[i],value:vals[i],tierLabel:MB_TIER_LABELS[i+lShift]||'Tier '+(i+1+lShift)});
-  }
-
-  if(topBounty>0) results.unshift({count:1,value:topBounty,isTop:true});
-  if(zeros>0) results.push({count:zeros,value:0,isZero:true});
-  return results;
-}
-
-function buildFlat(pool,n,zeros,topBounty,snap,minBounty){
-  const results=[];
-  let activeN=n-zeros;
-  let activePool=pool;
-  if(topBounty>0){activeN=Math.max(0,activeN-1);activePool=Math.max(0,activePool-topBounty);}
-  if(activeN<=0) {
-    if(topBounty>0) results.push({count:1,value:topBounty,isTop:true});
-    if(zeros>0) results.push({count:zeros,value:0,isZero:true});
-    return results;
-  }
-  let base=mbSnap(activePool/activeN,snap);
-  // Snap (or Math.round when snap=0) can round up; step down one unit to keep remainder ≥ 0
-  if(base*activeN>activePool) base-=snap>0?snap:1;
-  // Apply min bounty floor
-  if(minBounty>0){
-    const floor=snap>0?Math.ceil(minBounty/snap)*snap:minBounty;
-    if(base<floor) base=floor;
-  }
-  const rem=activePool-base*activeN;
-  const topVal=base+(snap>0?Math.round(rem/snap)*snap:rem);
-  if(topBounty>0) results.push({count:1,value:topBounty,isTop:true});
-  if(topVal!==base) results.push({count:1,value:topVal});
-  results.push({count:topVal!==base?activeN-1:activeN,value:base});
-  if(zeros>0) results.push({count:zeros,value:0,isZero:true});
-  return results.filter(r=>r.count>0);
-}
-
-function buildCustom(pool,n,zeros,topBounty,customTiers){
-  // Just validate and return as-is — operator controls everything
-  const rows=customTiers.filter(r=>r.count>0&&r.value>=0);
-  const totalCount=rows.reduce((s,r)=>s+r.count,0)+(topBounty>0?1:0)+zeros;
-  const totalVal=rows.reduce((s,r)=>s+r.count*r.value,0)+(topBounty>0?topBounty:0);
-  return {rows,totalCount,totalVal,valid:Math.abs(totalVal-pool)<1&&totalCount===n};
-}
-
-function calcMB(){
-  const pool=parseFloat(document.getElementById('mb-pool').value)||0;
-  const n=parseInt(document.getElementById('mb-n').value)||0;
-  const topBounty=parseFloat(document.getElementById('mb-top').value)||0;
-  const minBounty=parseFloat(document.getElementById('mb-min').value)||0;
-  const zeros=parseInt(document.getElementById('mb-zeros').value)||0;
-  if(!pool||!n){document.getElementById('mb-results-wrap').style.display='none';return;}
-
-  MB_CONFIG={mode:MB_MODE,snap:MB_SNAP,zeros,topBounty,minBounty,
-    tierSettings:MB_MODE==='tiered'?MB_TIERS.map((t,i)=>{const ls=topBounty>0?1:0;return{...t,label:MB_TIER_LABELS[i+ls]||'Tier '+(i+1+ls)};}):null};
-
-  let tiers=[];
-  if(MB_MODE==='tiered') tiers=buildTiered(pool,n,zeros,topBounty,MB_TIERS,MB_SNAP,minBounty);
-  else if(MB_MODE==='flat') tiers=buildFlat(pool,n,zeros,topBounty,MB_SNAP,minBounty);
-  else {renderMBCustomValidation(pool,n,zeros,topBounty);return;}
-
-  MB_ROWS=tiers; MB_POOL=pool; MB_N=n;
-  _renderMBResults();
-}
-
-function renderMBCustomValidation(pool,n,zeros,topBounty){
-  MB_CONFIG={mode:'custom',snap:MB_SNAP,zeros,topBounty,minBounty:0,tierSettings:null};
-  const cv=buildCustom(pool,n,zeros,topBounty,MB_CUSTOM);
-  const el=document.getElementById('mb-custom-validation');
-  const countOk=cv.totalCount===n;
-  const valOk=Math.abs(cv.totalVal-pool)<1;
-  el.innerHTML=`<span style="color:${countOk?'var(--green3)':'var(--red)'};">Envelopes: ${cv.totalCount} / ${n}</span>&nbsp;&nbsp;`+
-    `<span style="color:${valOk?'var(--green3)':'var(--red)'};">Pool: ${fmtMB(cv.totalVal)} / ${fmtMB(pool)}</span>`;
-  if(cv.valid){
-    MB_ROWS=[...cv.rows.slice().reverse().map(r=>({count:r.count,value:r.value})),...(topBounty>0?[{count:1,value:topBounty,isTop:true}]:[]),...(zeros>0?[{count:zeros,value:0,isZero:true}]:[])];
-    MB_POOL=pool; MB_N=n; _renderMBResults();
-  } else document.getElementById('mb-results-wrap').style.display='none';
-}
-
-function fmtMB(n){return '$'+Math.round(n).toLocaleString('en-AU');}
-function pct(v,total){return total>0?(v/total*100).toFixed(1)+'%':'—';}
-
-function _renderMBResults(){
-  const tiers=MB_ROWS,pool=MB_POOL,n=MB_N;
-  const wrap=document.getElementById('mb-results-wrap');
-  const el=document.getElementById('mb-results');
-  if(!tiers||tiers.length===0){wrap.style.display='none';return;}
-  wrap.style.display='';
-
-  const totalCount=tiers.reduce((s,t)=>s+t.count,0);
-  const totalVal=tiers.reduce((s,t)=>s+t.count*t.value,0);
-  const poolOk=Math.abs(totalVal-pool)<1;
-  const countOk=totalCount===n;
-  const avgEV=pool/n;
-
-  let h=`<div class="tbl-wrap"><table>
-    <thead><tr>
-      <th>Tier</th><th class="r">Count</th><th class="r">Prize each</th>
-      <th class="r">Probability</th><th class="r">EV per elim</th>
-    </tr></thead><tbody>`;
-
-  tiers.forEach((t,i)=>{
-    const label=t.isTop?'🏆 Top Bounty':t.isZero?'💀 Blank':t.tierLabel||'●';
-    const prob=t.count/n;
-    const ev=prob*t.value;
-    const countCell=(t.isTop||t.isZero)
-      ?t.count
-      :`<input class="w75" type="number" min="0" step="1" value="${t.count}" onchange="editMBCount(${i},+this.value)">`;
-    const prizeCell=t.isZero
-      ?'<span style="color:var(--dim);">$0</span>'
-      :`<input class="w100" type="number" step="${MB_SNAP||1}" value="${Math.round(t.value)}" onchange="editMBPrize(${i},+this.value)">`;
-    h+=`<tr>
-      <td><span class="mb-tier-label">${label}</span></td>
-      <td class="r">${countCell}</td>
-      <td class="r" style="font-family:'Source Code Pro',monospace;">${prizeCell}</td>
-      <td id="mb-prob-${i}" class="r" style="color:var(--dim);font-family:'Source Code Pro',monospace;">${pct(t.count,n)}</td>
-      <td id="mb-ev-${i}" class="r" style="font-family:'Source Code Pro',monospace;">${fmtMB(ev)}</td>
-    </tr>`;
-  });
-
-  h+=`</tbody><tfoot><tr>
-    <td>TOTAL</td>
-    <td id="mb-fc" class="r" style="color:${countOk?'var(--green3)':'var(--red)'};">${totalCount} ${countOk?'✓':'✗'}</td>
-    <td id="mb-fv" class="r" style="color:${poolOk?'var(--green3)':'var(--red)'};">${fmtMB(totalVal)} ${poolOk?'✓':'✗'}</td>
-    <td class="r" style="color:var(--dim);">—</td>
-    <td class="r" style="color:var(--gold2);font-family:'Source Code Pro',monospace;">avg ${fmtMB(avgEV)}</td>
-  </tr></tfoot></table></div>`;
-
-  h+=`<div id="mb-config-section">${_buildConfigHTML()}</div>`;
-  el.innerHTML=h;
-}
-
-function _buildConfigHTML(){
-  const c=MB_CONFIG;
-  if(!c.mode) return '';
-  const topRow=MB_ROWS.find(t=>t.isTop);
-  const regularTiers=MB_ROWS.filter(t=>!t.isTop&&!t.isZero);
-  if(!regularTiers.length&&!topRow) return '';
-
-  const parts=[];
-  if(c.snap) parts.push(`Snap ${fmtMB(c.snap)}`);
-  if(c.minBounty) parts.push(`Min ${fmtMB(c.minBounty)}`);
-  if(c.zeros) parts.push(`Blanks ${c.zeros}`);
-  const meta=parts.length?` · ${parts.join(' · ')}`:'';
-
-  // Back-calculate weight (= count) and multiplier (= prize / lowest prize)
-  // so these values can be typed back into Tier Settings to reproduce this distribution.
-  const prizes=regularTiers.map(t=>t.value).filter(v=>v>0);
-  const basePrize=prizes.length?Math.min(...prizes):0;
-
-  let h=`<div style="margin-top:16px;border-top:2px solid var(--border);padding-top:12px;">
-    <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:1.2px;color:var(--dim);margin-bottom:6px;">Distribution summary${meta}</div>
-    <div class="tbl-wrap"><table style="width:auto;">
-      <thead><tr>
-        <th>Tier</th><th class="r">Weight</th><th class="r">Multiplier</th>
-        <th class="r">Count</th><th class="r">Prize each</th>
-      </tr></thead><tbody>`;
-
-  if(topRow){
-    h+=`<tr>
-      <td><span class="mb-tier-label">🏆 Top Bounty</span></td>
-      <td class="r" style="color:var(--dim);">—</td><td class="r" style="color:var(--dim);">—</td>
-      <td class="r">1</td>
-      <td class="r" style="font-family:'Source Code Pro',monospace;">${fmtMB(topRow.value)}</td>
-    </tr>`;
-  }
-
-  regularTiers.forEach(t=>{
-    const mult=basePrize>0?Math.round(t.value/basePrize*100)/100:0;
-    h+=`<tr>
-      <td><span class="mb-tier-label">${t.tierLabel||'●'}</span></td>
-      <td class="r" style="color:var(--dim);">${t.count}</td>
-      <td class="r" style="font-family:'Source Code Pro',monospace;">×${mult}</td>
-      <td class="r">${t.count}</td>
-      <td class="r" style="font-family:'Source Code Pro',monospace;">${fmtMB(t.value)}</td>
-    </tr>`;
-  });
-
-  h+=`</tbody></table></div></div>`;
-  return h;
-}
-
-function _updateMBStats(){
-  const tiers=MB_ROWS,pool=MB_POOL,n=MB_N;
-  const totalCount=tiers.reduce((s,t)=>s+t.count,0);
-  const totalVal=tiers.reduce((s,t)=>s+t.count*t.value,0);
-  const poolOk=Math.abs(totalVal-pool)<1;
-  const countOk=totalCount===n;
-  tiers.forEach((t,i)=>{
-    const probEl=document.getElementById('mb-prob-'+i);
-    const evEl=document.getElementById('mb-ev-'+i);
-    if(probEl) probEl.textContent=pct(t.count,n);
-    if(evEl) evEl.textContent=fmtMB(t.count/n*t.value);
-  });
-  const fc=document.getElementById('mb-fc');
-  const fv=document.getElementById('mb-fv');
-  if(fc){fc.style.color=countOk?'var(--green3)':'var(--red)';fc.textContent=`${totalCount} ${countOk?'✓':'✗'}`;}
-  if(fv){fv.style.color=poolOk?'var(--green3)':'var(--red)';fv.textContent=`${fmtMB(totalVal)} ${poolOk?'✓':'✗'}`;}
-  const cs=document.getElementById('mb-config-section');
-  if(cs) cs.innerHTML=_buildConfigHTML();
-}
-
-function editMBPrize(i,val){
-  const v=parseFloat(val);
-  if(isNaN(v)||v<0)return;
-  MB_ROWS[i].value=v;
-  _updateMBStats();
-}
-
-function editMBCount(i,val){
-  const v=parseInt(val);
-  if(isNaN(v)||v<0)return;
-  MB_ROWS[i].count=v;
-  _updateMBStats();
-}
-</script>
+<script src="scripts/payout-engine.js"></script>
+<script src="scripts/app.js"></script>
 </body>
 </html>

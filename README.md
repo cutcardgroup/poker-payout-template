@@ -7,41 +7,38 @@ Fork this repo, add your own themes, and deploy to Cloudflare Pages.
 
 ```
 poker-payout/
-├── index.html          # Calculator — loads theme from ?club= URL param
-├── admin.html          # Admin preview (not linked publicly)
-├── _worker.js          # Cloudflare Pages Function — maps hostnames → club
+├── index.html                 # Calculator markup — loads scripts/payout-engine.js then scripts/app.js
+├── admin.html                 # Admin preview (not linked publicly) — loads scripts/admin.js
+├── _worker.js                 # Cloudflare Pages Function — hostname routing + CSP / security headers
 ├── themes/
-│   ├── default.json    # Default green casino theme
-│   └── example.json    # Example theme stub — copy and rename
-├── logos/              # Operator logos (PNG preferred; SVG placeholder included)
+│   ├── default.json           # Default green casino theme
+│   └── example.json           # Example theme stub — copy and rename
+├── logos/                     # Operator logos (PNG preferred; SVG placeholder included)
 ├── scripts/
-│   ├── export-public.sh
-│   ├── test-payouts.js     # Payout calculation tests (39 cases)
-│   ├── test-bounty.js      # Mystery bounty calculation tests (63 cases)
-│   ├── test-random.js      # Random scenario stress test
-│   └── show-payout.js      # CLI tool — display payout table
+│   ├── payout-engine.js       # Pure math engine (UMD) — shared by browser + Node tests
+│   ├── app.js                 # Calculator runtime: theme loader, render fns, event handlers
+│   ├── admin.js               # Admin preview runtime
+│   ├── test-payouts.js        # Payout calculation tests (58 cases)
+│   ├── test-bounty.js         # Mystery bounty calculation tests (63 cases)
+│   ├── test-browser.js        # JSDOM end-to-end UI smoke (21 assertions)
+│   ├── test-random.js         # Random scenario stress test
+│   ├── show-payout.js         # CLI tool — display payout table
+│   └── export-public.sh
 └── package.json
 ```
 
 ## Quick start
 
 ```bash
+# Install dev dependencies (jsdom + node-fetch for UI smoke; wrangler for deploy)
+npm install
+
 # Local dev (themes require an HTTP server)
-npx serve . -p 3000
+npm run dev          # serves on http://localhost:3000
 
 # With a theme:  http://localhost:3000?club=example
 # Admin preview: http://localhost:3000/admin.html
 ```
-
-## Payout modes
-
-The calculator offers three payout structure modes, selectable via the button strip in the UI:
-
-| Mode | Description |
-|------|-------------|
-| **Standard** | Geometric decay from 3rd place down (rate 0.82). 1st/2nd and 2nd/3rd ratios are fixed at the top (default 1.45× and 1.30×). Ratios are adjustable via the expand toggle. |
-| **Standard (old)** | Classic bracket table lookup — uses the `payoutTable` percentages directly from the theme JSON (or built-in default). |
-| **Curve** | Exponential curve with three presets: Gentle, Medium, Steep. |
 
 ## Adding an operator
 
@@ -98,18 +95,45 @@ Each color key maps to the CSS variable `--<key>` on `:root`.
 
 ## Testing
 
-Both test suites mirror calculation logic from `index.html` and must pass before every commit:
+Two suites. Both pull math from `scripts/payout-engine.js` — the single source of truth shared with `index.html`. No copy/paste mirrors.
 
 ```bash
-npm test   # runs test-payouts.js + test-bounty.js
+npm test          # pure-math suites — run every commit (~1s)
+npm run test:ui   # JSDOM end-to-end smoke — run when touching UI plumbing (~10s)
 ```
 
-`test-payouts.js` — 39 tests: bracket selection, pool conservation, min-cash locking, guaranteed first, float precision, snap gap-inversion, Standard curve structure, and theme JSON validation.
+`test-payouts.js` — 58 tests: bracket selection, pool conservation, min-cash locking, guaranteed first, float precision, snap gap-inversion, Standard curve structure, max-same-prize stepping, FT 60% floor, min 1st place %, combined-feature scenarios, and theme JSON validation.
 
 `test-bounty.js` — 63 tests: mystery bounty envelope distribution (`buildFlat`, `buildTiered`, `buildCustom`), monotonicity, min-bounty floor, waterfall remainder, and edge cases.
+
+`test-browser.js` — 21 assertions across 9 cases: golden payout cases driven through the real DOM, rounding toggle, in-table prize edit via event delegation, tab switch, MB tiered calc, MB tier add/remove via `data-action`, admin button bindings. Self-spawns a dev server on :3100.
+
+Run `npm run test:ui` when changes touch:
+- `index.html` / `admin.html` markup (esp. `data-*` attrs, ids, `<script src>` paths)
+- `scripts/app.js` / `scripts/admin.js` (handlers, render fns, `setupEventHandlers`)
+- `_worker.js` CSP or static asset routing
+
+Skip `test:ui` for math-only changes (covered by `npm test`).
 
 ## Deploy to Cloudflare Pages
 
 1. Connect this repo to a Cloudflare Pages project (no build command needed)
 2. `_worker.js` is detected automatically
-3. Add your custom domains under **Custom domains** in the Pages dashboard
+3. **Set encrypted env vars in Pages → Settings → Environment variables:**
+   - `ADMIN_USER` — username for Basic Auth on `/admin.html`
+   - `ADMIN_PASSWORD` — password (strong, randomly generated)
+
+   If these aren't set, `/admin.html` returns 401 for everyone (fail-closed).
+4. Add your custom domains under **Custom domains** in the Pages dashboard
+
+### Hardening already in place
+
+- HTTP Basic Auth on `/admin.html` (env-var creds, constant-time compare)
+- Content-Security-Policy (script-src `'self'` only — no `'unsafe-inline'`)
+- HSTS, X-Frame-Options SAMEORIGIN, Permissions-Policy
+- `?club=` URL param whitelisted to `[a-z0-9_-]{1,32}` client-side
+- Theme `logo` URL restricted to same-origin `logos/`/`themes/` paths
+
+For brute-force protection on `/admin*`, add a Cloudflare WAF rate-limit
+rule (~10 req/min/IP). Not required by the code — it's an operational
+hardening step.

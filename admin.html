@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
 <title>Admin Preview — Poker Payout Calculator</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -121,8 +122,8 @@ table.pt-tbl .count{color:#8a9b80;text-align:right;font-size:.68rem;}
     <label>Club name / theme key</label>
     <div class="club-wrap">
       <input type="text" id="club-input" placeholder="e.g. spt" value="">
-      <button class="btn btn-green" onclick="loadPreview()">Preview</button>
-      <button class="btn btn-ghost" onclick="openNew()">Open tab ↗</button>
+      <button class="btn btn-green" id="btn-preview">Preview</button>
+      <button class="btn btn-ghost" id="btn-open-new">Open tab ↗</button>
     </div>
   </div>
   <div style="display:flex;flex-direction:column;gap:4px;">
@@ -171,169 +172,6 @@ table.pt-tbl .count{color:#8a9b80;text-align:right;font-size:.68rem;}
   <div class="chips" id="known-chips"></div>
 </div>
 
-<script>
-const KNOWN_THEMES = ['default', 'example'];
-
-// Default payout table — loaded from themes/default.json (single source of truth)
-let DEFAULT_PT = null;
-
-function buildChips() {
-  ['chips','known-chips'].forEach(id => {
-    const container = document.getElementById(id);
-    KNOWN_THEMES.forEach(name => {
-      const el = document.createElement('button');
-      el.className = 'chip';
-      el.textContent = name;
-      el.onclick = () => selectChip(name);
-      container.appendChild(el);
-    });
-  });
-}
-
-function selectChip(name) {
-  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.textContent === name));
-  document.getElementById('club-input').value = name;
-  loadPreview();
-}
-
-async function loadPreview() {
-  const club = document.getElementById('club-input').value.trim();
-  if (!club) return;
-
-  const previewUrl = `index.html?club=${encodeURIComponent(club)}`;
-  const themeFile  = `themes/${club}.json`;
-
-  document.getElementById('info-url').textContent  = previewUrl;
-  document.getElementById('info-file').textContent = themeFile;
-  document.getElementById('info-status').textContent = 'Loading…';
-  document.getElementById('empty-state').style.display = 'none';
-  document.getElementById('preview-frame').src = previewUrl;
-  document.getElementById('pt-club').textContent = club;
-
-  try {
-    const res = await fetch(themeFile);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const theme = await res.json();
-    document.getElementById('info-status').textContent = '✓ Theme found';
-    renderPayoutPanel(theme, club);
-  } catch(e) {
-    document.getElementById('info-status').textContent =
-      e.message.startsWith('HTTP') ? `⚠ ${e.message} — falling back to default` : '✗ Fetch failed — need a local server (npx serve .)';
-    renderPayoutPanel(null, club);
-  }
-}
-
-function renderPayoutPanel(theme, club) {
-  const body     = document.getElementById('pt-body');
-  const swatches = document.getElementById('pt-swatches');
-
-  // ── Logo ─────────────────────────────────────────────────
-  if (theme && theme.logo) {
-    swatches.innerHTML = `<div style="padding:8px 14px;border-bottom:1px solid #1a2e22;background:#111a14;">
-      <img src="${theme.logo}" alt="${theme.name || club}"
-           style="max-height:44px;max-width:220px;object-fit:contain;display:block;">
-    </div>`;
-  } else {
-    swatches.innerHTML = '';
-  }
-
-  // ── Colour swatches ──────────────────────────────────────
-  if (theme && theme.colors && Object.keys(theme.colors).length) {
-    const html = Object.entries(theme.colors).map(([k,v]) => `
-      <div class="swatch-wrap" title="${k}: ${v}">
-        <div class="swatch" style="background:${v}"></div>
-        <div class="swatch-lbl">${k}</div>
-      </div>`).join('');
-    swatches.innerHTML += `<div class="swatches">${html}</div>`;
-  }
-
-  // ── Payout table ─────────────────────────────────────────
-  let brackets;
-  let usingDefault = false;
-
-  if (!theme) {
-    brackets = DEFAULT_PT;
-    usingDefault = true;
-  } else if (!theme.payoutTable) {
-    brackets = DEFAULT_PT;
-    usingDefault = true;
-  } else {
-    brackets = theme.payoutTable;
-  }
-  let html = usingDefault
-    ? `<div class="default-notice" style="padding:8px 12px;margin-bottom:8px;border-radius:5px;border:1px solid #1a2e22;text-align:left;font-size:.7rem;color:#4a6050;">
-        ♠ Showing built-in default table${theme ? ` — <em>${theme.name || club}</em> has no custom payoutTable` : ''}
-       </div>`
-    : '';
-
-  brackets.forEach((b, bi) => {
-    const places = b.rows.reduce((s, r) => s + r[2], 0);
-    const totalPct = b.rows.reduce((s, r) => s + r[1] * r[2], 0);
-    const pctOk = Math.abs(totalPct - 100) < 0.1;
-    const pctChip = `<span class="pct-chip${pctOk?'':' bad'}">${totalPct.toFixed(2)}%</span>`;
-
-    const rangeLabel = b.places !== undefined
-      ? `${b.places} place${b.places !== 1 ? 's' : ''}`
-      : b.max >= 9999
-        ? `${b.min}+ players`
-        : `${b.min}–${b.max} players`;
-
-    // Expand rows with count > 1 for display
-    let rowHtml = '';
-    let pos = 0;
-    b.rows.forEach(r => {
-      const [label, pct, count] = r;
-      if (count === 1) {
-        pos++;
-        rowHtml += `<tr><td class="place">${label}</td><td class="pct">${pct}%</td><td class="count"></td></tr>`;
-      } else {
-        rowHtml += `<tr><td class="place">${label}</td><td class="pct">${pct}% each</td><td class="count">×${count}</td></tr>`;
-        pos += count;
-      }
-    });
-
-    html += `
-      <div class="bracket open" id="bracket-${bi}">
-        <div class="bracket-hdr" onclick="toggleBracket(${bi})">
-          <div>
-            <span class="bracket-range">${rangeLabel}</span>
-            ${pctChip}
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span class="bracket-places">${places} place${places!==1?'s':''}</span>
-            <span class="bracket-chevron">▲</span>
-          </div>
-        </div>
-        <div class="bracket-rows">
-          <table class="pt-tbl"><tbody>${rowHtml}</tbody></table>
-        </div>
-      </div>`;
-  });
-
-  body.innerHTML = html;
-}
-
-function toggleBracket(bi) {
-  document.getElementById(`bracket-${bi}`).classList.toggle('open');
-}
-
-function openNew() {
-  const club = document.getElementById('club-input').value.trim() || 'default';
-  window.open(`index.html?club=${encodeURIComponent(club)}`, '_blank');
-}
-
-document.addEventListener('DOMContentLoaded', async () => {
-  // Load default PT from single source of truth before building UI
-  try {
-    const r = await fetch('themes/default.json');
-    if (r.ok) DEFAULT_PT = (await r.json()).payoutTable || null;
-  } catch(_) {}
-
-  buildChips();
-  document.getElementById('club-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') loadPreview();
-  });
-});
-</script>
+<script src="scripts/admin.js"></script>
 </body>
 </html>

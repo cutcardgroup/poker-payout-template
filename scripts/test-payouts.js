@@ -6,24 +6,15 @@
 
 const fs   = require('fs');
 const path = require('path');
+const E    = require('./payout-engine.js');
 
 // ── Payout table — loaded from themes/default.json (single source of truth) ──
 const defaultJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'themes', 'default.json'), 'utf8'));
 const PT = defaultJson.payoutTable.map(b => [b.min, b.max, b.rows]);
 
-// ── Calculation logic (mirrors index.html exactly) ───────────────────────────
-function getStruct(n) {
-  for (const [lo, hi, rows] of PT)
-    if (n >= lo && n <= hi) return rows.map(r => ({ label: r[0], pct: r[1], count: r[2] }));
-  return PT[PT.length - 1][2].map(r => ({ label: r[0], pct: r[1], count: r[2] }));
-}
-
-function scaleUnlocked(rows, pool) {
-  const lk = rows.filter(r => r.locked).reduce((s, r) => s + r.prize * r.count, 0);
-  const rem = pool - lk;
-  const ft = rows.filter(r => !r.locked).reduce((s, r) => s + r.prize * r.count, 0);
-  if (ft > 0) { const sc = Math.max(rem / ft, 0); rows.forEach(r => { if (!r.locked) r.prize *= sc; }); }
-}
+// Engine leaves bound to this file's PT (production go() supplies them as args).
+const getStruct     = (n) => E.getStruct(n, PT, 0);
+const scaleUnlocked = E.scaleUnlocked;
 
 function calculate({ entries, pool, minCash = 0, guaranteedFirst = 0, ftSize = 0, minFirstPct = 0 }) {
   const struct = getStruct(entries);
@@ -293,10 +284,7 @@ test(
 // Tests that manually editing a place within a grouped bracket correctly splits
 // the group and preserves labels and counts.
 
-function ordinal(n) {
-  const s = ['th','st','nd','rd'], v = n % 100;
-  return n + (s[(v-20)%10] || s[v] || s[0]);
-}
+const ordinal = E.ordinal;
 
 // Applies an in-place prize edit to rows[], mirroring index.html editPrizeAt().
 function applyEdit(rows, bracketIdx, withinIdx, prize) {
@@ -396,64 +384,7 @@ testSplit('Test 20 — edit last place in group (30th within 21st-30th): splits 
   assert(errors, totalPlaces === 30, `Total places: ${totalPlaces} (expected 30)`);
 });
 
-// ── snapDisplay (mirrors index.html exactly) ─────────────────────────────────
-function snapDisplay(rows, to, pool) {
-  if (!to) return rows.map(r => r.prize);
-  const s = rows.map(r => r.pinSnap ? r.prize : (r.locked ? Math.ceil(r.prize / to) * to : Math.round(r.prize / to) * to));
-  // Boundary gap: unlocked rows above locked groups must continue the
-  // accelerating gap pattern upward until natural gaps are large enough.
-  const fl = rows.findIndex(r => r.locked);
-  if (fl > 0) {
-    const lockedGaps = [];
-    for (let i = fl; i < rows.length - 1; i++) {
-      if (rows[i].locked && rows[i + 1].locked) lockedGaps.push(s[i] - s[i + 1]);
-    }
-    if (lockedGaps.length > 0) {
-      let reqGap = Math.max(...lockedGaps) + to;
-      for (let i = fl - 1; i >= 0; i--) {
-        if (rows[i].pinSnap) break;
-        const curGap = s[i] - s[i + 1];
-        if (curGap >= reqGap) break;
-        const needed = Math.ceil((reqGap - curGap) / to) * to;
-        s[i] += needed;
-        reqGap += to;
-      }
-    }
-  }
-  // Strict gap enforcement
-  let changed;
-  do {
-    changed = false;
-    for (let i = s.length - 2; i >= 1; i--) {
-      if (rows[i].pinSnap || rows[i].locked) continue;
-      if (s[i] - s[i+1] >= s[i-1] - s[i] && s[i] > s[i+1]) { s[i] -= to; changed = true; }
-    }
-  } while (changed);
-  // Monotonicity: ensure no unlocked row ties or inverts with the row below
-  if (fl > 0) {
-    for (let i = fl - 1; i >= 0; i--) {
-      if (rows[i].pinSnap) continue;
-      if (s[i] <= s[i + 1]) s[i] = s[i + 1] + to;
-    }
-  }
-  // Drift target: use pool if provided, otherwise raw total (synthetic tests)
-  const target = pool !== undefined ? pool : rows.reduce((sum, r) => sum + r.prize * r.count, 0);
-  const snapTot = rows.reduce((sum, r, i) => sum + s[i] * r.count, 0);
-  let rem = target - snapTot;
-  if (rem !== 0) {
-    for (let i = 0; i < s.length && rem !== 0; i++) {
-      if (rows[i].pinSnap || rows[i].locked) continue;
-      const floor = i < s.length - 1 ? s[i + 1] + to : 0;
-      if (rem < 0) {
-        const canAbsorb = (s[i] - floor) * rows[i].count;
-        if (canAbsorb <= 0) continue;
-        if (Math.abs(rem) > canAbsorb) { rem += canAbsorb; s[i] = floor; }
-        else { s[i] += rem / rows[i].count; rem = 0; }
-      } else { s[i] += rem / rows[i].count; rem = 0; }
-    }
-  }
-  return s;
-}
+const snapDisplay = E.snapDisplay;
 
 // ── Category D: Snap display / gap inversion tests ───────────────────────────
 // snapDisplay is display-only — these tests verify the visual output, not pool maths.
@@ -570,25 +501,7 @@ testSnap('Test 24 — $66 custom snap: non-standard unit enforces strict gaps, d
 // Mirrors buildStandardNew() from index.html exactly.
 // 1st = 2nd × 1.45, 2nd = 3rd × 1.30, 3rd+ = 82% geometric decay.
 // Brackets with count>1 use average weight of their constituent positions.
-function buildStandardNew(struct, pool, cap12, cap23, decay) {
-  const DECAY = decay || 0.82, CAP12 = cap12 || 1.45, CAP23 = cap23 || 1.30;
-  const n = struct.reduce((s, r) => s + r.count, 0);
-  if (!n) return [];
-  const w = new Array(n).fill(1.0);
-  for (let i = n - 2; i >= 2; i--) w[i] = w[i + 1] / DECAY;
-  if (n >= 3) { w[1] = w[2] * CAP23; w[0] = w[1] * CAP12; }
-  else if (n === 2) { w[0] = w[1] * CAP12; }
-  let pos = 0;
-  const rows = struct.map(r => {
-    let ws = 0;
-    for (let j = 0; j < r.count; j++) ws += w[pos + j];
-    pos += r.count;
-    return { label: r.label, count: r.count, prize: ws / r.count, locked: false };
-  });
-  const tw = rows.reduce((s, r) => s + r.prize * r.count, 0);
-  rows.forEach(r => r.prize = r.prize / tw * pool);
-  return rows;
-}
+const buildStandardNew = E.buildStandardNew;
 
 function calculateNew({ entries, pool, minCash = 0, guaranteedFirst = 0 }) {
   const struct = getStruct(entries);
@@ -685,7 +598,7 @@ testNew('Test 28 — Standard + min-cash: pool conserved after locking', errors 
 // Mirrors maxSameAuto(), Pass 1b (max same expansion + stepped gaps),
 // and Pass 3b (second min cash check after guarantee) from index.html.
 
-function maxSameAuto(e) { return 3 + Math.floor(Math.max(0, e - 1) / 180); }
+const maxSameAuto = E.maxSameAuto;
 
 function calculateWithMaxSame({ entries, pool, minCash = 0, guaranteedFirst = 0, maxSame = null, snap = 50 }) {
   const struct = getStruct(entries);
