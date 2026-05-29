@@ -2,7 +2,10 @@
 // PAYOUT TABLE  (pct = per-place %)
 // ─────────────────────────────────────────────────────────
 // PT is loaded from themes/default.json in loadTheme() — do not hardcode here
-let PT=[], PT_PCT=0;  // PT_PCT>0 → per-placing mode (ceil(entries×PT_PCT/100))
+let PT=[], PT_PCT=0, TAIL_DECAY=0.85;  // PT_PCT>0 → per-placing mode (ceil(entries×PT_PCT/100))
+// Cliff curve mode (opt-in via theme.curve==='cliff'): graduated-to-floor with a
+// final-table wall at ftSize→ftSize+1. Bypasses the standard build + plateau passes.
+let CURVE='', CLIFF_OPTS={cliff:1.30, ftDecay:1.25, cap1:1.87, cap2:1.55, maxSame:10};
 
 // ─────────────────────────────────────────────────────────
 // ENGINE BINDINGS — pure functions come from scripts/payout-engine.js
@@ -22,8 +25,8 @@ const mbSnap            = _E.mbSnap;
 const buildTiered       = _E.buildTiered;
 const buildFlat         = _E.buildFlat;
 const buildCustom       = _E.buildCustom;
-function getStruct(n){ return _E.getStruct(n, PT, PT_PCT); }
-function snapDisplay(rows, to){ return _E.snapDisplay(rows, to, POOL); }
+function getStruct(n){ return _E.getStruct(n, PT, PT_PCT, TAIL_DECAY); }
+function snapDisplay(rows, to){ return _E.snapDisplay(rows, to, POOL, CURVE==='cliff'?{preserveShape:true}:undefined); }
 
 // ─────────────────────────────────────────────────────────
 // STATE
@@ -156,9 +159,11 @@ function go(){
   const { rows } = _E.calculatePayouts({
     entries, pool, PT, PT_PCT,
     minCash: mc, guaranteedFirst: gfirst, minFirstPct, ftSize,
-    snap: SNAP, maxSame: MAX_SAME,
+    snap: SNAP, maxSame: CURVE==='cliff' ? CLIFF_OPTS.maxSame : MAX_SAME,
     placesOverride: op,
-    cap12, cap23, decay,
+    cap12, cap23, decay, tailDecay: TAIL_DECAY,
+    curve: CURVE, cliff: CLIFF_OPTS.cliff, ftDecay: CLIFF_OPTS.ftDecay,
+    cap1: CLIFF_OPTS.cap1, cap2: CLIFF_OPTS.cap2,
   });
 
   ROWS=rows;
@@ -497,6 +502,7 @@ function applyTheme(theme){
     if(ex.minCash)  $('f-mincash').placeholder='e.g. '+ex.minCash;
     if(ex.ftSize!=null) $('f-ft-size').value=ex.ftSize;
     if(ex.minFirstPct!=null) $('f-min-first-pct').value=ex.minFirstPct;
+    if(ex.places!=null) $('f-places').value=ex.places;
     if(ex.cap12!=null){ $('f-cap12').value=ex.cap12; updateRatioDisplay(); }
     if(ex.cap23!=null){ $('f-cap23').value=ex.cap23; updateRatioDisplay(); }
     if(ex.decay!=null){ $('f-decay').value=ex.decay; updateRatioDisplay(); }
@@ -514,10 +520,24 @@ function applyTheme(theme){
     if(theme.payoutPct && theme.payoutTable[0]?.places!==undefined){
       PT_PCT=theme.payoutPct;
       PT=theme.payoutTable.map(b=>[b.places,b.rows]);
+      TAIL_DECAY=theme.tailDecay??0.85;
     }else{
       PT_PCT=0;
       PT=theme.payoutTable.map(b=>[b.min,b.max,b.rows]);
+      TAIL_DECAY=0.85;
     }
+  }
+
+  // Cliff curve mode (per-placing themes only — needs payoutPct for place count).
+  CURVE = theme.curve==='cliff' ? 'cliff' : '';
+  if(CURVE==='cliff'){
+    CLIFF_OPTS={
+      cliff:   theme.cliff   ?? 1.30,
+      ftDecay: theme.ftDecay ?? 1.25,
+      cap1:    theme.cap1    ?? 1.87,
+      cap2:    theme.cap2    ?? 1.55,
+      maxSame: theme.maxSame ?? 10,
+    };
   }
 }
 

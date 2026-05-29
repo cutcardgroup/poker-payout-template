@@ -1,0 +1,42 @@
+{
+  "name": "Example Cliff Club",
+  "logo": "",
+  "fbHeader": "🃏 EXAMPLE CLIFF PAYOUT STRUCTURE 🃏",
+  "fbFooter": "Good luck at the tables! ♠",
+  "fontFamily": "Montserrat",
+  "examples": {
+    "entries": 487,
+    "pool": 128160,
+    "minCash": 700,
+    "snap": 50,
+    "ftSize": 9,
+    "minFirstPct": 0,
+    "places": 57
+  },
+  "payoutPct": 12,
+  "curve": "cliff",
+  "cliff": 1.30,
+  "ftDecay": 1.25,
+  "cap1": 1.87,
+  "cap2": 1.55,
+  "maxSame": 10,
+  "colors": {
+    "green":  "#1a6b3a",
+    "green2": "#22883f",
+    "green3": "#2daf52",
+    "felt":   "#0d4a27",
+    "gold":   "#c8a84b",
+    "gold2":  "#e8c86a",
+    "dark":   "#0a0a0a",
+    "card":   "#111a14",
+    "card2":  "#0d1810",
+    "text":   "#e8ead8",
+    "dim":    "#8a9b80",
+    "border": "#2a4030"
+  },
+  "payoutTable": [
+    { "places": 2, "rows": [["1st", 60, 1], ["2nd", 40, 1]] },
+    { "places": 3, "rows": [["1st", 50, 1], ["2nd", 30, 1], ["3rd", 20, 1]] },
+    { "places": 9, "rows": [["1st", 30, 1], ["2nd", 18, 1], ["3rd", 13, 1], ["4th", 10, 1], ["5th", 8, 1], ["6th", 7, 1], ["7th", 6, 1], ["8th", 4.5, 1], ["9th", 3.5, 1]] }
+  ]
+}

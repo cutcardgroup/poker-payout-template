@@ -31,11 +31,25 @@
   // PT shape: range-based  = [[lo, hi, rows], ...]
   //           per-placing  = [[places, rows], ...]   (use PT_PCT > 0 mode)
   // rows entries: [label, pct, count]
-  function getStruct(n, PT, PT_PCT) {
+  function getStruct(n, PT, PT_PCT, tailDecay) {
     if (PT_PCT > 0) {
       const places = Math.ceil(n * PT_PCT / 100);
-      const b = PT.find(e => e[0] === places) || PT[PT.length - 1];
-      return b[1].map(r => ({ label: r[0], pct: r[1], count: r[2] }));
+      const b = PT.find(e => e[0] >= places);
+      if (b) {
+        const rows = b[1].map(r => ({ label: r[0], pct: r[1], count: r[2] }));
+        return applyOverride(rows, places);
+      }
+      // places > largest defined bracket — extend tail via geometric decay
+      const last = PT[PT.length - 1];
+      const lastMax = last[0];
+      const rows = last[1].map(r => ({ label: r[0], pct: r[1], count: r[2] }));
+      const td = tailDecay !== undefined ? tailDecay : 0.85;
+      let prev = last[1][last[1].length - 1][1];
+      for (let k = lastMax + 1; k <= places; k++) {
+        prev = prev * td;
+        rows.push({ label: ordinal(k), pct: Math.round(prev * 100) / 100, count: 1 });
+      }
+      return rows;
     }
     for (const [lo, hi, rows] of PT) {
       if (n >= lo && n <= hi) return rows.map(r => ({ label: r[0], pct: r[1], count: r[2] }));
@@ -107,6 +121,117 @@
     return rows;
   }
 
+  // ─── Cliff curve (graduated-to-floor with a final-table wall) ─────────────
+  // Opt-in via cfg.curve === 'cliff'. Unlike buildStandardNew (which feeds the
+  // min-cash lock + max-same stepping passes and plateaus the tail), this builds
+  // a smoothly graduated structure straight to the floor, with a deliberate jump
+  // at the ftSize→ftSize+1 final-table bubble. Banding is algorithmic.
+
+  // Algorithmic band layout: singles for the top, then growing groups capped at
+  // maxSame. Returns [[startPlace, size], ...] covering 1..N.
+  function autoBands(N, maxSame, ftSize) {
+    const ms = maxSame > 0 ? maxSame : 10;
+    const singles = Math.min(N, Math.max(10, ftSize || 0));
+    const bands = [];
+    let p = 1;
+    for (; p <= singles; p++) bands.push([p, 1]);
+    const grow = [2, 3, 3, 5, 8, 10];
+    let gi = 0;
+    while (p <= N) {
+      let size = gi < grow.length ? grow[gi] : ms;
+      gi++;
+      size = Math.min(size, ms, N - p + 1);
+      bands.push([p, size]);
+      p += size;
+    }
+    return bands;
+  }
+
+  // Per-place prize array (index 1..N). FT places 1..ftSize use CAP1/CAP2/ftDecay;
+  // a CLIFF jump sits at ftSize→ftSize+1; the tail ftSize+1..N is geometric with
+  // decay bisected so the last place lands on `floor`. When gFirst>0, 1st is pinned
+  // in dollars and places 2..N are solved over the remaining pool (cliff preserved).
+  function solveCliffWeights(N, pool, floor, gFirst, opts) {
+    const o = opts || {};
+    const CAP1 = o.cap1 || 1.87, CAP2 = o.cap2 || 1.55;
+    const DFT = o.ftDecay || 1.25, CLIFF = o.cliff || 1.30;
+    const ftSize = Math.min(o.ftSize || 9, N);
+    const gf = gFirst > 0 ? gFirst : 0;
+    const lo0 = gf > 0 ? 2 : 1;
+    const poolRest = gf > 0 ? pool - gf : pool;
+
+    let d = 0.98, scale = 0, w = [];
+    function rel() {
+      const a = new Array(N + 1).fill(0);
+      for (let k = ftSize; k >= 3; k--) a[k] = Math.pow(DFT, ftSize - k);
+      if (N >= 3) { a[2] = a[3] * CAP2; a[1] = a[2] * CAP1; }
+      else if (N === 2) { a[1] = CAP1; a[2] = 1; }
+      else { a[1] = 1; }
+      if (N > ftSize) a[ftSize + 1] = a[ftSize] / CLIFF;
+      return a;
+    }
+    function compute() {
+      w = rel();
+      if (N > ftSize + 1) {
+        for (let k = ftSize + 2; k <= N; k++) w[k] = w[ftSize + 1] * Math.pow(d, k - (ftSize + 1));
+      }
+      let sum = 0; for (let k = lo0; k <= N; k++) sum += w[k];
+      scale = sum > 0 ? poolRest / sum : 0;
+      return scale * w[N];
+    }
+    if (N > ftSize + 1) {
+      for (let it = 0; it < 600; it++) {
+        const last = compute();
+        if (Math.abs(last - floor) < 0.25) break;
+        d += last > floor ? -0.0002 : 0.0002;
+        if (d <= 0.5 || d >= 0.999) break;
+      }
+    } else {
+      compute();
+    }
+    const prize = new Array(N + 1).fill(0);
+    for (let k = 1; k <= N; k++) prize[k] = (gf > 0 && k === 1) ? gf : w[k] * scale;
+    return prize;
+  }
+
+  // Build banded rows from the cliff curve. opts: minCash, guaranteedFirst,
+  // maxSame, ftSize, cap1, cap2, ftDecay, cliff.
+  function buildCliffCurve(N, pool, opts) {
+    const o = opts || {};
+    if (N <= 0) return [];
+    const floor = o.minCash > 0 ? o.minCash : 0;
+    const gFirst = o.guaranteedFirst > 0 ? o.guaranteedFirst : 0;
+    const maxSame = o.maxSame > 0 ? o.maxSame : 10;
+    const ftSize = o.ftSize || 9;
+
+    const prize = solveCliffWeights(N, pool, floor, gFirst, o);
+    const bands = autoBands(N, maxSame, ftSize);
+    const rows = bands.map(([start, size]) => {
+      let s = 0; for (let k = start; k < start + size; k++) s += prize[k];
+      const hi = start + size - 1;
+      return {
+        label: start === hi ? ordinal(start) : `${ordinal(start)}-${ordinal(hi)}`,
+        count: size, prize: s / size, locked: false,
+      };
+    });
+    // Safety: no band below min cash (small fields the tail can't reach the floor).
+    if (floor > 0) rows.forEach(r => { if (r.prize < floor) r.prize = floor; });
+    // Pin guaranteed 1st so display snapping won't move it.
+    if (gFirst > 0 && rows.length) { rows[0].locked = true; rows[0].pinSnap = true; }
+    // Band averaging preserves the pool exactly; only the floor clamp can drift it.
+    // Reconcile any residual onto the richest non-pinned band, keeping it ≥ floor.
+    const tot = rows.reduce((s, r) => s + r.prize * r.count, 0);
+    const diff = pool - tot;
+    if (Math.abs(diff) > 0.005) {
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i].pinSnap) continue;
+        const per = diff / rows[i].count;
+        if (rows[i].prize + per >= floor) { rows[i].prize += per; break; }
+      }
+    }
+    return rows;
+  }
+
   // MUTATES `rows`. Scales unlocked prizes so the pool sum is preserved.
   function scaleUnlocked(rows, pool) {
     const lk = rows.filter(r => r.locked).reduce((s, r) => s + r.prize * r.count, 0);
@@ -122,40 +247,52 @@
   // Pure: returns an array of snapped prizes indexed parallel to rows.
   // `pool` is optional; when omitted the raw row total is the drift target
   // (used by synthetic tests that have no pool concept).
-  function snapDisplay(rows, to, pool) {
+  function snapDisplay(rows, to, pool, opts) {
     if (!to) return rows.map(r => r.prize);
+    // preserveShape: skip the gap-convexity passes (which assume monotonically
+    // increasing gaps — the normal payout shape). The cliff curve is deliberately
+    // non-convex (large final-table gap, then small ones), so those passes would
+    // flatten the wall and dump the deficit onto 1st. Just clamp inversions.
+    const preserve = !!(opts && opts.preserveShape);
     const s = rows.map(r => r.pinSnap ? r.prize
       : (r.locked ? Math.ceil(r.prize / to) * to : Math.round(r.prize / to) * to));
 
     const fl = rows.findIndex(r => r.locked);
-    if (fl > 0) {
-      const lockedGaps = [];
-      for (let i = fl; i < rows.length - 1; i++) {
-        if (rows[i].locked && rows[i + 1].locked) lockedGaps.push(s[i] - s[i + 1]);
+    if (preserve) {
+      for (let i = 1; i < s.length; i++) {
+        if (rows[i].pinSnap) continue;
+        if (s[i] > s[i - 1]) s[i] = s[i - 1];
       }
-      if (lockedGaps.length > 0) {
-        let reqGap = Math.max(...lockedGaps) + to;
-        for (let i = fl - 1; i >= 0; i--) {
-          if (rows[i].pinSnap) break;
-          const curGap = s[i] - s[i + 1];
-          if (curGap >= reqGap) break;
-          const needed = Math.ceil((reqGap - curGap) / to) * to;
-          s[i] += needed;
-          reqGap += to;
+    } else {
+      if (fl > 0) {
+        const lockedGaps = [];
+        for (let i = fl; i < rows.length - 1; i++) {
+          if (rows[i].locked && rows[i + 1].locked) lockedGaps.push(s[i] - s[i + 1]);
+        }
+        if (lockedGaps.length > 0) {
+          let reqGap = Math.max(...lockedGaps) + to;
+          for (let i = fl - 1; i >= 0; i--) {
+            if (rows[i].pinSnap) break;
+            const curGap = s[i] - s[i + 1];
+            if (curGap >= reqGap) break;
+            const needed = Math.ceil((reqGap - curGap) / to) * to;
+            s[i] += needed;
+            reqGap += to;
+          }
         }
       }
-    }
 
-    let changed;
-    do {
-      changed = false;
-      for (let i = s.length - 2; i >= 1; i--) {
-        if (rows[i].pinSnap || rows[i].locked) continue;
-        if (s[i] - s[i + 1] >= s[i - 1] - s[i] && s[i] > s[i + 1]) {
-          s[i] -= to; changed = true;
+      let changed;
+      do {
+        changed = false;
+        for (let i = s.length - 2; i >= 1; i--) {
+          if (rows[i].pinSnap || rows[i].locked) continue;
+          if (s[i] - s[i + 1] >= s[i - 1] - s[i] && s[i] > s[i + 1]) {
+            s[i] -= to; changed = true;
+          }
         }
-      }
-    } while (changed);
+      } while (changed);
+    }
 
     if (fl > 0) {
       for (let i = fl - 1; i >= 0; i--) {
@@ -337,10 +474,22 @@
       ftSize = 0, snap = 0, maxSame = null,
       placesOverride = 0,
       cap12 = 1.45, cap23 = 1.30, decay = 0.82,
+      tailDecay = 0.85,
     } = cfg;
     const ms = maxSame !== null ? maxSame : maxSameAuto(entries);
 
-    let struct = getStruct(entries, PT, PT_PCT);
+    // Cliff mode: graduated-to-floor curve with a final-table wall. Bypasses the
+    // standard build + min-cash/stepping passes entirely (those plateau the tail).
+    if (cfg.curve === 'cliff') {
+      const N = placesOverride > 0 ? placesOverride : Math.ceil(entries * PT_PCT / 100);
+      const rows = buildCliffCurve(N, pool, {
+        minCash, guaranteedFirst, maxSame: ms, ftSize: ftSize || 9,
+        cap1: cfg.cap1, cap2: cfg.cap2, ftDecay: cfg.ftDecay, cliff: cfg.cliff,
+      });
+      return { rows };
+    }
+
+    let struct = getStruct(entries, PT, PT_PCT, tailDecay);
     if (placesOverride > 0) struct = applyOverride(struct, placesOverride);
     let rows = buildStandardNew(struct, pool, cap12, cap23, decay);
 
@@ -471,6 +620,7 @@
     ordinal, snapRound, maxSameAuto,
     getStruct, applyOverride, expandRows,
     buildStandardNew, scaleUnlocked, snapDisplay,
+    autoBands, solveCliffWeights, buildCliffCurve,
     // payout orchestration
     calculatePayouts,
     // mystery bounty

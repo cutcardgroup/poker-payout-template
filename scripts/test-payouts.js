@@ -1044,6 +1044,144 @@ testNew('I6 — regression: existing themes with ftSize=9, minFirstPct=0 produce
   }
 });
 
+// ── Group J: PT_PCT mode (per-placing themes with payoutPct) ─────────────────
+console.log('\n── Group J: PT_PCT mode (per-placing themes) ─────────────────────────────');
+
+function loadPerPlacingTheme(filename) {
+  const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'themes', filename), 'utf8'));
+  return {
+    PT: t.payoutTable.map(b => [b.places, b.rows]),
+    PT_PCT: t.payoutPct,
+    tailDecay: t.tailDecay ?? 0.85,
+  };
+}
+
+// Real operator themes are stripped from the public template — gate those tests
+// so `npm test` passes in both repos. (Caller short-circuits the cfg IIFE.)
+function hasTheme(filename) {
+  return fs.existsSync(path.join(__dirname, '..', 'themes', filename));
+}
+
+function testPct(name, cfg, checks) {
+  if (!cfg) { console.log(`\n• SKIP ${name} (theme not present in this repo)`); return; }
+  let ok = true;
+  const notes = [];
+  try {
+    const { rows } = E.calculatePayouts(cfg);
+    const places = rows.reduce((s, r) => s + r.count, 0);
+    const total  = rows.reduce((s, r) => s + r.prize * r.count, 0);
+    const result = { rows, places, total, firstPrize: rows[0].prize };
+    for (const [check, label] of checks) {
+      const pass = check(result);
+      if (!pass) { ok = false; notes.push(`  ✗ ${label}`); }
+      else        { notes.push(`  ✓ ${label}`); }
+    }
+  } catch (e) {
+    ok = false;
+    notes.push(`  ✗ threw: ${e.message}`);
+  }
+  console.log(`\n${ok ? '✓' : '✗'} ${name}`);
+  notes.forEach(n => console.log(n));
+  if (ok) passed++; else failed++;
+}
+
+testPct('J1 — stackedpoker 480 entries × 12% = 58 places, pool conserved, tail decays', hasTheme('stackedpoker.json') ? (() => {
+  const { PT, PT_PCT, tailDecay } = loadPerPlacingTheme('stackedpoker.json');
+  return { entries: 480, pool: 128160, minCash: 700, PT, PT_PCT, tailDecay };
+})() : null, [
+  [r => r.places === 58, 'Places paid = 58 (ceil(480 × 12 / 100))'],
+  [r => Math.abs(r.total - 128160) < 0.01, 'Total = pool ($128,160)'],
+  [r => r.firstPrize > r.rows[1].prize, '1st > 2nd'],
+  [r => { const exp = r.rows.slice(-8); return exp.every((row, i) => i === 0 || row.prize <= exp[i-1].prize + 0.01); }, 'Tail rows monotonically non-increasing'],
+]);
+
+testPct('J2 — spt 800 entries × 13% = 104 places, pool conserved, tail decays', hasTheme('spt.json') ? (() => {
+  const { PT, PT_PCT, tailDecay } = loadPerPlacingTheme('spt.json');
+  return { entries: 800, pool: 200000, minCash: 1000, PT, PT_PCT, tailDecay };
+})() : null, [
+  [r => r.places === 104, 'Places paid = 104 (ceil(800 × 13 / 100))'],
+  [r => Math.abs(r.total - 200000) < 0.01, 'Total = pool ($200,000)'],
+  [r => r.firstPrize > r.rows[1].prize, '1st > 2nd'],
+  [r => r.rows[r.rows.length - 1].prize > 0, 'Last place > $0'],
+]);
+
+testPct('J3 — matchroom 227 entries × 13% = 30 places (within table), non-regressive', hasTheme('matchroom.json') ? (() => {
+  const { PT, PT_PCT, tailDecay } = loadPerPlacingTheme('matchroom.json');
+  return { entries: 227, pool: 65725, minCash: 700, PT, PT_PCT, tailDecay };
+})() : null, [
+  [r => r.places === 30, 'Places paid = 30 (ceil(227 × 13 / 100) = 30, within table)'],
+  [r => Math.abs(r.total - 65725) < 0.01, 'Total = pool ($65,725)'],
+  [r => r.firstPrize > r.rows[1].prize, '1st > 2nd'],
+]);
+
+testPct('J4 — gte lookup: entries=10, PT_PCT=12 picks places:2 bracket not places:1', hasTheme('stackedpoker.json') ? (() => {
+  const { PT, PT_PCT, tailDecay } = loadPerPlacingTheme('stackedpoker.json');
+  return { entries: 10, pool: 1000, minCash: 0, PT, PT_PCT, tailDecay };
+})() : null, [
+  [r => r.places === 2, 'ceil(10 × 12 / 100) = 2, gte lookup returns places:2 bracket (not places:1)'],
+  [r => Math.abs(r.total - 1000) < 0.01, 'Total = pool'],
+]);
+
+// ── Group K: cliff curve mode (graduated-to-floor + final-table wall) ─────────
+console.log('\n── Group K: cliff curve mode ─────────────────────────────────────────────');
+
+function loadCliffTheme(filename) {
+  const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'themes', filename), 'utf8'));
+  return {
+    PT_PCT: t.payoutPct,
+    PT: t.payoutTable.map(b => [b.places, b.rows]),
+    curve: t.curve, cliff: t.cliff, ftDecay: t.ftDecay,
+    cap1: t.cap1, cap2: t.cap2, maxSame: t.maxSame,
+  };
+}
+const cliffRatio = (rows, a, b) => {
+  const x = rows.find(r => r.label === a), y = rows.find(r => r.label === b);
+  return x && y ? x.prize / y.prize : NaN;
+};
+const cliffMaxBand = rows => Math.max(...rows.map(r => r.count));
+const cliffMonotonic = rows => rows.every((r, i) => i === 0 || r.prize <= rows[i - 1].prize + 0.01);
+
+testPct('K1 — cliff theme: 487 entries, $128,160, 57 places, full pool + 9/10 wall', (() => {
+  const t = loadCliffTheme('example-cliff.json');
+  return { entries: 487, pool: 128160, minCash: 700, snap: 0, ftSize: 9, placesOverride: 57, ...t };
+})(), [
+  [r => r.places === 57, 'Places paid = 57 (placesOverride)'],
+  [r => Math.abs(r.total - 128160) < 0.01, 'Total = pool ($128,160)'],
+  [r => Math.abs(cliffRatio(r.rows, '9th', '10th') - 1.30) < 0.02, '9th/10th ≈ 1.30 (final-table wall)'],
+  [r => cliffRatio(r.rows, '8th', '9th') < cliffRatio(r.rows, '9th', '10th'), '9→10 jump bigger than 8→9'],
+  [r => cliffMaxBand(r.rows) <= 10, 'No band larger than maxSame (10)'],
+  [r => cliffMonotonic(r.rows), 'Bands monotonically non-increasing'],
+  [r => r.rows[r.rows.length - 1].prize >= 700 - 0.01, 'Last band ≥ min cash ($700)'],
+]);
+
+testPct('K2 — cliff + guaranteedFirst $30k: 1st pinned, pool conserved, wall intact', (() => {
+  const t = loadCliffTheme('example-cliff.json');
+  return { entries: 487, pool: 128160, minCash: 700, snap: 0, ftSize: 9, placesOverride: 57, guaranteedFirst: 30000, ...t };
+})(), [
+  [r => Math.abs(r.firstPrize - 30000) < 0.01, '1st = guaranteed $30,000'],
+  [r => Math.abs(r.total - 128160) < 0.01, 'Total = pool'],
+  [r => Math.abs(cliffRatio(r.rows, '9th', '10th') - 1.30) < 0.02, '9th/10th ≈ 1.30 preserved under gFirst'],
+]);
+
+testPct('K3 — cliff ftSize=7: wall moves to 7th/8th, not 9th/10th', (() => {
+  const t = loadCliffTheme('example-cliff.json');
+  return { entries: 487, pool: 128160, minCash: 700, snap: 0, ftSize: 7, placesOverride: 57, ...t };
+})(), [
+  [r => Math.abs(cliffRatio(r.rows, '7th', '8th') - 1.30) < 0.02, '7th/8th ≈ 1.30 (wall at ftSize=7)'],
+  [r => Math.abs(cliffRatio(r.rows, '9th', '10th') - 1.30) > 0.10, '9th/10th is NOT the wall'],
+  [r => Math.abs(r.total - 128160) < 0.01, 'Total = pool'],
+]);
+
+testPct('K4 — cliff small field (12 places, thick pool): wall forms, pool conserved', (() => {
+  const t = loadCliffTheme('example-cliff.json');
+  return { entries: 100, pool: 60000, minCash: 700, snap: 0, ftSize: 9, placesOverride: 12, ...t };
+})(), [
+  [r => r.places === 12, 'Places paid = 12'],
+  [r => Math.abs(r.total - 60000) < 0.01, 'Total = pool'],
+  [r => Math.abs(cliffRatio(r.rows, '9th', '10th') - 1.30) < 0.05, '9th/10th ≈ 1.30 (min cash not binding)'],
+  [r => cliffMonotonic(r.rows), 'Monotonic'],
+]);
+
 function report(slug, errors) {
   if (errors.length === 0) {
     console.log(`✓ ${slug}`);

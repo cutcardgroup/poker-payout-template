@@ -292,6 +292,30 @@ async function runTests() {
     log(d.querySelectorAll('#chips .chip').length > 0, 'Case 9 chips rendered');
     dom.window.close();
   }
+
+  // Case 10: stackedpoker cliff curve mode end-to-end (theme load → go → render)
+  {
+    const dom = await loadPage('/?club=stackedpoker');
+    const d = dom.window.document;
+    log(d.title.includes('Stacked'), 'Case 10 stackedpoker theme loaded', d.title);
+    setVal(d.getElementById('f-entries'), 487);
+    setVal(d.getElementById('f-pool'),    128160);
+    setVal(d.getElementById('f-mincash'), 700);
+    // example pre-fills f-places=57 and f-ft-size=9 on theme load
+    d.getElementById('btn-calculate').click();
+    await new Promise(r => setTimeout(r, 100));
+    const { rows, total } = tblTotals(d);
+    log(rows >= 12 && rows <= 22, 'Case 10 banded table rendered', `${rows} bands`);
+    log(Math.abs(total - 128160) < 0.5, 'Case 10 total=$128,160 (full pool)', `got $${total}`);
+    // 9→10 final-table wall: prizes are singles for places 1..10
+    const prizes = [...d.querySelectorAll('#tbl-inner tbody tr input[data-edit="prize"]')]
+      .map(i => parseFloat(i.value));
+    const p9 = prizes[8], p10 = prizes[9], p8 = prizes[7];
+    const wall = p9 / p10, inner = p8 / p9;
+    log(wall > 1.20 && wall < 1.45, 'Case 10 9→10 wall present', `9/10=${wall.toFixed(3)}`);
+    log(wall > inner, 'Case 10 9→10 jump bigger than 8→9', `${wall.toFixed(3)} > ${inner.toFixed(3)}`);
+    dom.window.close();
+  }
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
