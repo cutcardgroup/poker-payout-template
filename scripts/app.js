@@ -114,15 +114,20 @@ function toggleRatios(){
 function updateRatioDisplay(){
   const c12=parseFloat(document.getElementById('f-cap12').value)||1.45;
   const c23=parseFloat(document.getElementById('f-cap23').value)||1.30;
+  const disp=document.getElementById('ratio-display');
+  const sum=document.getElementById('ratio-summary');
+  const pct=r=>Math.round((r-1)*100);
   // Cliff uses cap12/cap23 as the 1st/2nd & 2nd/3rd ratios (editable); the third
   // figure is the final-table wall, and Decay does not apply (hidden).
   if(CURVE==='cliff'){
-    document.getElementById('ratio-display').textContent=
-      c12.toFixed(2)+'× / '+c23.toFixed(2)+'× / wall '+CLIFF_OPTS.cliff.toFixed(2);
+    const wall=CLIFF_OPTS.cliff;
+    disp.textContent=c12.toFixed(2)+'× / '+c23.toFixed(2)+'× / wall '+wall.toFixed(2);
+    if(sum) sum.dataset.tip='Sets the prize gap at the top. '+c12.toFixed(2)+'× means 1st wins '+pct(c12)+'% more than 2nd; '+c23.toFixed(2)+'× means 2nd wins '+pct(c23)+'% more than 3rd. Wall ('+wall.toFixed(2)+'×) is the jump into the final table.';
     return;
   }
   const dc=parseFloat(document.getElementById('f-decay').value)||0.82;
-  document.getElementById('ratio-display').textContent=c12.toFixed(2)+'× / '+c23.toFixed(2)+'× / '+dc.toFixed(2);
+  disp.textContent=c12.toFixed(2)+'× / '+c23.toFixed(2)+'× / '+dc.toFixed(2);
+  if(sum) sum.dataset.tip='Sets the prize gap at the top. '+c12.toFixed(2)+'× means 1st wins '+pct(c12)+'% more than 2nd; '+c23.toFixed(2)+'× means 2nd wins '+pct(c23)+'% more than 3rd. Decay ('+dc.toFixed(2)+') controls how fast prizes drop from 3rd down — higher = flatter mid-field.';
 }
 
 function setPayoutMode(mode){
@@ -573,10 +578,7 @@ function applyModeVisibility(){
   if(decayCol)    decayCol.style.display    = cliff ? 'none' : '';
   if(minfirstCol) minfirstCol.style.display = cliff ? 'none' : '';
   if(ptog)        ptog.textContent          = cliff ? 'Cliff' : 'Standard';
-  const sum=document.getElementById('ratio-summary');
-  if(sum) sum.dataset.tip = cliff
-    ? 'Sets the prize gap at the top. 1.87× means 1st wins 87% more than 2nd; 1.55× means 2nd wins 55% more than 3rd. Wall is the jump into the final table.'
-    : 'Sets the prize gap at the top. 1.45× means 1st wins 45% more than 2nd; 1.30× means 2nd wins 30% more than 3rd. Decay controls how fast prizes drop from 3rd down — higher = flatter mid-field.';
+  // Tooltip is generated dynamically in updateRatioDisplay() (reflects live ratios).
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
