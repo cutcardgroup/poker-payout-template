@@ -1151,6 +1151,7 @@ testPct('K1 — cliff theme: 487 entries, $128,160, 57 places, full pool + 9/10 
   [r => cliffRatio(r.rows, '8th', '9th') < cliffRatio(r.rows, '9th', '10th'), '9→10 jump bigger than 8→9'],
   [r => cliffMaxBand(r.rows) <= 10, 'No band larger than maxSame (10)'],
   [r => cliffMonotonic(r.rows), 'Bands monotonically non-increasing'],
+  [r => { const g = []; for (let i = 0; i < r.rows.length - 1; i++) g.push(r.rows[i].prize - r.rows[i + 1].prize); return g.every((x, i) => i === 0 || x <= g[i - 1] + 0.01); }, 'Gaps monotonically non-increasing (convex — no inversions)'],
   [r => r.rows[r.rows.length - 1].prize >= 700 - 0.01, 'Last band ≥ min cash ($700)'],
 ]);
 

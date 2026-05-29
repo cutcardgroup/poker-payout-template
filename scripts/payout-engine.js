@@ -147,79 +147,81 @@
     return bands;
   }
 
-  // Per-place prize array (index 1..N). FT places 1..ftSize use CAP1/CAP2/ftDecay;
-  // a CLIFF jump sits at ftSize→ftSize+1; the tail ftSize+1..N is geometric with
-  // decay bisected so the last place lands on `floor`. When gFirst>0, 1st is pinned
-  // in dollars and places 2..N are solved over the remaining pool (cliff preserved).
-  function solveCliffWeights(N, pool, floor, gFirst, opts) {
-    const o = opts || {};
-    const CAP1 = o.cap1 || 1.87, CAP2 = o.cap2 || 1.55;
-    const DFT = o.ftDecay || 1.25, CLIFF = o.cliff || 1.30;
-    const ftSize = Math.min(o.ftSize || 9, N);
-    const gf = gFirst > 0 ? gFirst : 0;
-    const lo0 = gf > 0 ? 2 : 1;
-    const poolRest = gf > 0 ? pool - gf : pool;
-
-    let d = 0.98, scale = 0, w = [];
-    function rel() {
-      const a = new Array(N + 1).fill(0);
-      for (let k = ftSize; k >= 3; k--) a[k] = Math.pow(DFT, ftSize - k);
-      if (N >= 3) { a[2] = a[3] * CAP2; a[1] = a[2] * CAP1; }
-      else if (N === 2) { a[1] = CAP1; a[2] = 1; }
-      else { a[1] = 1; }
-      if (N > ftSize) a[ftSize + 1] = a[ftSize] / CLIFF;
-      return a;
-    }
-    function compute() {
-      w = rel();
-      if (N > ftSize + 1) {
-        for (let k = ftSize + 2; k <= N; k++) w[k] = w[ftSize + 1] * Math.pow(d, k - (ftSize + 1));
-      }
-      let sum = 0; for (let k = lo0; k <= N; k++) sum += w[k];
-      scale = sum > 0 ? poolRest / sum : 0;
-      return scale * w[N];
-    }
-    if (N > ftSize + 1) {
-      for (let it = 0; it < 600; it++) {
-        const last = compute();
-        if (Math.abs(last - floor) < 0.25) break;
-        d += last > floor ? -0.0002 : 0.0002;
-        if (d <= 0.5 || d >= 0.999) break;
-      }
-    } else {
-      compute();
-    }
-    const prize = new Array(N + 1).fill(0);
-    for (let k = 1; k <= N; k++) prize[k] = (gf > 0 && k === 1) ? gf : w[k] * scale;
-    return prize;
-  }
-
-  // Build banded rows from the cliff curve. opts: minCash, guaranteedFirst,
-  // maxSame, ftSize, cap1, cap2, ftDecay, cliff.
+  // Build banded rows for cliff mode. opts: minCash, guaranteedFirst, maxSame,
+  // ftSize, cap1, cap2, ftDecay, cliff, snap.
+  //
+  // FT places 1..ftSize: geometric (ftDecay) with cap1/cap2 at the top — convex.
+  // Cliff: the first tail band (place ftSize+1) sits at (ftSize value) / cliff.
+  // Tail: band values are assigned DIRECTLY with non-increasing gaps (convex),
+  // each gap ≥ `snap` so values stay distinct after rounding (no floor plateau,
+  // honours max-same). Computing band values directly — rather than averaging a
+  // per-place curve — is what keeps the gaps monotonic; averaging over growing
+  // bands was producing gap inversions. Overall scale is bisected to hit the pool.
   function buildCliffCurve(N, pool, opts) {
     const o = opts || {};
     if (N <= 0) return [];
+    const CAP1 = o.cap1 || 1.87, CAP2 = o.cap2 || 1.55;
+    const DFT = o.ftDecay || 1.25, CLIFF = o.cliff || 1.30;
     const floor = o.minCash > 0 ? o.minCash : 0;
     const gFirst = o.guaranteedFirst > 0 ? o.guaranteedFirst : 0;
     const maxSame = o.maxSame > 0 ? o.maxSame : 10;
-    const ftSize = o.ftSize || 9;
+    const ftSize = Math.min(o.ftSize || 9, N);
+    const gmin = o.snap > 0 ? o.snap : 50; // min band-to-band gap (keeps values distinct)
 
-    const prize = solveCliffWeights(N, pool, floor, gFirst, o);
     const bands = autoBands(N, maxSame, ftSize);
+
+    // FT relative weights, anchored so w[ftSize] = 1.
+    const w = new Array(ftSize + 1).fill(0);
+    for (let k = ftSize; k >= 3; k--) w[k] = Math.pow(DFT, ftSize - k);
+    if (ftSize >= 3) { w[2] = w[3] * CAP2; w[1] = w[2] * CAP1; }
+    else if (ftSize === 2) { w[1] = CAP1; w[2] = 1; }
+    else { w[1] = 1; }
+
+    const tailBands = bands.filter(b => b[0] > ftSize); // place ftSize+1 .. N
+    const m = tailBands.length;
+    const sizes = tailBands.map(b => b[1]);
+
+    // Convex tail band values from v1 (cliff value) down to floor, gaps ≥ gmin.
+    function tailValues(v1) {
+      if (m === 0) return [];
+      if (m === 1) return [Math.max(v1, floor)];
+      const span = v1 - floor;
+      const base = (m - 1) * gmin;
+      const extra = span - base;                 // above the min-gap baseline
+      const c = extra > 0 ? 2 * extra / ((m - 1) * m) : 0;
+      const g = [];                              // gaps, largest at top, ≥ gmin
+      for (let k = 1; k <= m - 1; k++) g.push(gmin + c * (m - k));
+      const v = new Array(m); v[m - 1] = floor;
+      for (let k = m - 2; k >= 0; k--) v[k] = v[k + 1] + g[k];
+      return v;
+    }
+
+    const ftLo = gFirst > 0 ? 2 : 1;
+    function totalFor(scale) {
+      let t = gFirst > 0 ? gFirst : 0;
+      for (let k = ftLo; k <= ftSize; k++) t += scale * w[k];
+      tailValues(scale * w[ftSize] / CLIFF).forEach((val, i) => { t += val * sizes[i]; });
+      return t;
+    }
+    // Bisect scale (totalFor is monotonic increasing in scale).
+    let lo = 0, hi = Math.max(pool, 1);
+    while (totalFor(hi) < pool && hi < 1e12) hi *= 2;
+    for (let it = 0; it < 200; it++) { const mid = (lo + hi) / 2; if (totalFor(mid) > pool) hi = mid; else lo = mid; }
+    const scale = (lo + hi) / 2;
+    const tv = tailValues(scale * w[ftSize] / CLIFF);
+
     const rows = bands.map(([start, size]) => {
-      let s = 0; for (let k = start; k < start + size; k++) s += prize[k];
-      const hi = start + size - 1;
-      return {
-        label: start === hi ? ordinal(start) : `${ordinal(start)}-${ordinal(hi)}`,
-        count: size, prize: s / size, locked: false,
-      };
+      const hi2 = start + size - 1;
+      const label = start === hi2 ? ordinal(start) : `${ordinal(start)}-${ordinal(hi2)}`;
+      let prize;
+      if (start <= ftSize) prize = (gFirst > 0 && start === 1) ? gFirst : scale * w[start];
+      else prize = tv[tailBands.findIndex(tb => tb[0] === start)];
+      return { label, count: size, prize, locked: false };
     });
-    // Safety: no band below min cash (small fields the tail can't reach the floor).
+
     if (floor > 0) rows.forEach(r => { if (r.prize < floor) r.prize = floor; });
-    // Pin guaranteed 1st so display snapping won't move it.
     if (gFirst > 0 && rows.length) { rows[0].locked = true; rows[0].pinSnap = true; }
-    // Band averaging preserves the pool exactly; only the floor clamp can drift it.
-    // Reconcile any residual onto the richest non-pinned band, keeping it ≥ floor.
+    // Reconcile any residual (from floor clamp) onto the richest non-pinned band.
     const tot = rows.reduce((s, r) => s + r.prize * r.count, 0);
     const diff = pool - tot;
     if (Math.abs(diff) > 0.005) {
@@ -483,7 +485,7 @@
     if (cfg.curve === 'cliff') {
       const N = placesOverride > 0 ? placesOverride : Math.ceil(entries * PT_PCT / 100);
       const rows = buildCliffCurve(N, pool, {
-        minCash, guaranteedFirst, maxSame: ms, ftSize: ftSize || 9,
+        minCash, guaranteedFirst, maxSame: ms, ftSize: ftSize || 9, snap,
         cap1: cfg.cap1, cap2: cfg.cap2, ftDecay: cfg.ftDecay, cliff: cfg.cliff,
       });
       return { rows };
@@ -620,7 +622,7 @@
     ordinal, snapRound, maxSameAuto,
     getStruct, applyOverride, expandRows,
     buildStandardNew, scaleUnlocked, snapDisplay,
-    autoBands, solveCliffWeights, buildCliffCurve,
+    autoBands, buildCliffCurve,
     // payout orchestration
     calculatePayouts,
     // mystery bounty
