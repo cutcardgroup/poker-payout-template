@@ -301,7 +301,7 @@ async function runTests() {
     setVal(d.getElementById('f-entries'), 487);
     setVal(d.getElementById('f-pool'),    128160);
     setVal(d.getElementById('f-mincash'), 700);
-    // example pre-fills f-places=57 and f-ft-size=9 on theme load
+    setVal(d.getElementById('f-places'),  ''); // clear override → auto 59 places (the case that showed ✗)
     d.getElementById('btn-calculate').click();
     await new Promise(r => setTimeout(r, 100));
     const { rows, total } = tblTotals(d);
@@ -314,6 +314,12 @@ async function runTests() {
     const wall = p9 / p10, inner = p8 / p9;
     log(wall > 1.20 && wall < 1.45, 'Case 10 9→10 wall present', `9/10=${wall.toFixed(3)}`);
     log(wall > inner, 'Case 10 9→10 jump bigger than 8→9', `${wall.toFixed(3)} > ${inner.toFixed(3)}`);
+    // No ✗ in the Jump column — the gap-inversion bug surfaced here
+    const xMarks = (d.getElementById('tbl-inner').textContent.match(/✗/g) || []).length;
+    log(xMarks === 0, 'Case 10 no ✗ (gap inversions) in Jump column', `${xMarks} ✗`);
+    // Setup panel reflects cliff params, not standard defaults
+    log(d.getElementById('maxsame-display').textContent.trim() === '10', 'Case 10 identical-prizes shows 10 (cliff maxSame)', d.getElementById('maxsame-display').textContent);
+    log(d.getElementById('s-mode').textContent.trim() === 'Cliff', 'Case 10 mode = Cliff', d.getElementById('s-mode').textContent);
     dom.window.close();
   }
 }

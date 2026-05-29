@@ -261,10 +261,21 @@
 
     const fl = rows.findIndex(r => r.locked);
     if (preserve) {
-      for (let i = 1; i < s.length; i++) {
-        if (rows[i].pinSnap) continue;
-        if (s[i] > s[i - 1]) s[i] = s[i - 1];
+      // Round band-to-band GAPS to the grid and force them non-increasing (convex),
+      // then rebuild values bottom-up. Rounding values directly lets $-snapping
+      // reorder near-equal gaps into inversions; rounding gaps avoids that. The
+      // intentional cliff wall (gap index cliffGapIndex) is exempt from the clamp.
+      const n = s.length;
+      const cliffGap = (opts && opts.cliffGapIndex != null) ? opts.cliffGapIndex : -1;
+      const gap = [];
+      for (let i = 0; i < n - 1; i++) gap.push(Math.round((rows[i].prize - rows[i + 1].prize) / to) * to);
+      for (let i = 1; i < gap.length; i++) {
+        if (i === cliffGap || i - 1 === cliffGap) continue;
+        if (gap[i] > gap[i - 1]) gap[i] = gap[i - 1];
       }
+      s[n - 1] = rows[n - 1].pinSnap ? rows[n - 1].prize : Math.round(rows[n - 1].prize / to) * to;
+      for (let i = n - 2; i >= 0; i--) s[i] = s[i + 1] + gap[i];
+      for (let i = 0; i < n; i++) if (rows[i].pinSnap) s[i] = rows[i].prize;
     } else {
       if (fl > 0) {
         const lockedGaps = [];

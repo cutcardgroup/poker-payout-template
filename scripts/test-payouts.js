@@ -1183,6 +1183,44 @@ testPct('K4 — cliff small field (12 places, thick pool): wall forms, pool cons
   [r => cliffMonotonic(r.rows), 'Monotonic'],
 ]);
 
+// K5 — DISPLAYED (snapped) gaps must stay convex. The raw curve is convex, but
+// $-rounding can reorder near-equal gaps into inversions — this is what shows as
+// ✗ in the Jump column. Checks the snapDisplay output, not the raw rows.
+function testCliffSnapped(name, cfg, snap) {
+  const ftSize = cfg.ftSize || 9;
+  const cliffIdx = ftSize - 1; // gap index of the intentional wall (place ftSize→ftSize+1)
+  const { rows } = E.calculatePayouts(cfg);
+  const sv = E.snapDisplay(rows, snap, cfg.pool, { preserveShape: true, cliffGapIndex: cliffIdx });
+  const g = []; for (let i = 0; i < rows.length - 1; i++) g.push(sv[i] - sv[i + 1]);
+  const bad = [];
+  for (let i = 1; i < g.length; i++) {
+    if (i === cliffIdx || i - 1 === cliffIdx) continue; // wall exempt
+    if (g[i] > g[i - 1] + 0.01) bad.push(`${rows[i].label} ($${g[i]} > $${g[i - 1]})`);
+  }
+  const total = rows.reduce((a, r, i) => a + sv[i] * r.count, 0);
+  const totalOk = Math.abs(total - cfg.pool) < 0.01;
+  const ok = bad.length === 0 && totalOk;
+  console.log(`\n${ok ? '✓' : '✗'} ${name}`);
+  console.log(`  ${bad.length === 0 ? '✓' : '✗'} snapped gaps non-increasing (convex)${bad.length ? ' — inversions at ' + bad.join(', ') : ''}`);
+  console.log(`  ${totalOk ? '✓' : '✗'} snapped total = pool ($${total})`);
+  if (ok) passed++; else failed++;
+}
+
+['example-cliff.json'].forEach(() => {
+  const t = loadCliffTheme('example-cliff.json');
+  // 59 places (auto: ceil(487 × 12%)) — the field size that showed ✗ in the Jump column
+  testCliffSnapped('K5 — snapped gaps convex @ $50, 59 places (auto)',
+    { entries: 487, pool: 128160, minCash: 700, snap: 50, ftSize: 9, placesOverride: 0, ...t }, 50);
+  // 57 places, $25/$100 rounding too
+  testCliffSnapped('K6 — snapped gaps convex @ $25, 57 places',
+    { entries: 487, pool: 128160, minCash: 700, snap: 25, ftSize: 9, placesOverride: 57, ...t }, 25);
+  testCliffSnapped('K7 — snapped gaps convex @ $100, 59 places',
+    { entries: 487, pool: 128160, minCash: 700, snap: 100, ftSize: 9, placesOverride: 0, ...t }, 100);
+  // guaranteed-first pinned, snapped convex
+  testCliffSnapped('K8 — snapped gaps convex @ $50 with guaranteedFirst $30k',
+    { entries: 487, pool: 128160, minCash: 700, snap: 50, ftSize: 9, placesOverride: 57, guaranteedFirst: 30000, ...t }, 50);
+});
+
 function report(slug, errors) {
   if (errors.length === 0) {
     console.log(`✓ ${slug}`);

@@ -26,7 +26,7 @@ const buildTiered       = _E.buildTiered;
 const buildFlat         = _E.buildFlat;
 const buildCustom       = _E.buildCustom;
 function getStruct(n){ return _E.getStruct(n, PT, PT_PCT, TAIL_DECAY); }
-function snapDisplay(rows, to){ return _E.snapDisplay(rows, to, POOL, CURVE==='cliff'?{preserveShape:true}:undefined); }
+function snapDisplay(rows, to){ return _E.snapDisplay(rows, to, POOL, CURVE==='cliff'?{preserveShape:true, cliffGapIndex:(FT_SIZE||9)-1}:undefined); }
 
 // ─────────────────────────────────────────────────────────
 // STATE
@@ -99,7 +99,8 @@ function updateMaxSameDisplay(){
   const inp=document.getElementById('f-maxsame');
   if(!inp.dataset.manual) inp.value=auto;
   MAX_SAME=parseInt(inp.value)||auto;
-  document.getElementById('maxsame-display').textContent=MAX_SAME;
+  // Cliff mode uses the theme's maxSame, not the standard auto value.
+  document.getElementById('maxsame-display').textContent=CURVE==='cliff'?CLIFF_OPTS.maxSame:MAX_SAME;
 }
 
 function toggleRatios(){
@@ -111,6 +112,13 @@ function toggleRatios(){
 }
 
 function updateRatioDisplay(){
+  // Cliff mode ignores the standard cap12/cap23/decay fields — show its own curve
+  // params so the panel isn't misleading.
+  if(CURVE==='cliff'){
+    document.getElementById('ratio-display').textContent=
+      CLIFF_OPTS.cap1.toFixed(2)+'× / '+CLIFF_OPTS.cap2.toFixed(2)+'× / cliff '+CLIFF_OPTS.cliff.toFixed(2);
+    return;
+  }
   const c12=parseFloat(document.getElementById('f-cap12').value)||1.45;
   const c23=parseFloat(document.getElementById('f-cap23').value)||1.30;
   const dc=parseFloat(document.getElementById('f-decay').value)||0.82;
@@ -379,7 +387,7 @@ function updateStatus(){
     $('s-g-wrap').style.display='none';
   }
 
-  $('s-mode').textContent='Standard';
+  $('s-mode').textContent=CURVE==='cliff'?'Cliff':'Standard';
 
   if(SNAP){
     const sv=snapDisplay(ROWS,SNAP);
@@ -415,7 +423,7 @@ function renderFB(){
   const lines=[
     fbHeader,
     `Entries: ${ENTRIES}  |  Prize Pool: ${fmt(POOL)}`,
-    `Structure: Standard`,
+    `Structure: ${CURVE==='cliff'?'Cliff':'Standard'}`,
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
   ];
   displayRows.forEach((r,i)=>lines.push(`${r.label.padEnd(16)}${fmt(fbSnapOf(i))}`));
@@ -539,6 +547,9 @@ function applyTheme(theme){
       maxSame: theme.maxSame ?? 10,
     };
   }
+  // Reflect the active mode's params in the setup panel (cliff ≠ standard defaults).
+  updateRatioDisplay();
+  updateMaxSameDisplay();
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
