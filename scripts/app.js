@@ -95,12 +95,12 @@ function toggleMaxSame(){
 
 function updateMaxSameDisplay(){
   const entries=parseInt($('f-entries').value)||0;
-  const auto=maxSameAuto(entries);
   const inp=document.getElementById('f-maxsame');
-  if(!inp.dataset.manual) inp.value=auto;
-  MAX_SAME=parseInt(inp.value)||auto;
-  // Cliff mode uses the theme's maxSame, not the standard auto value.
-  document.getElementById('maxsame-display').textContent=CURVE==='cliff'?CLIFF_OPTS.maxSame:MAX_SAME;
+  // Cliff defaults to the theme's maxSame; standard auto-scales with entries.
+  const dflt=CURVE==='cliff'?CLIFF_OPTS.maxSame:maxSameAuto(entries);
+  if(!inp.dataset.manual) inp.value=dflt;
+  MAX_SAME=parseInt(inp.value)||dflt;
+  document.getElementById('maxsame-display').textContent=MAX_SAME;
 }
 
 function toggleRatios(){
@@ -112,15 +112,15 @@ function toggleRatios(){
 }
 
 function updateRatioDisplay(){
-  // Cliff mode ignores the standard cap12/cap23/decay fields — show its own curve
-  // params so the panel isn't misleading.
-  if(CURVE==='cliff'){
-    document.getElementById('ratio-display').textContent=
-      CLIFF_OPTS.cap1.toFixed(2)+'× / '+CLIFF_OPTS.cap2.toFixed(2)+'× / cliff '+CLIFF_OPTS.cliff.toFixed(2);
-    return;
-  }
   const c12=parseFloat(document.getElementById('f-cap12').value)||1.45;
   const c23=parseFloat(document.getElementById('f-cap23').value)||1.30;
+  // Cliff uses cap12/cap23 as the 1st/2nd & 2nd/3rd ratios (editable); the third
+  // figure is the final-table wall, and Decay does not apply (hidden).
+  if(CURVE==='cliff'){
+    document.getElementById('ratio-display').textContent=
+      c12.toFixed(2)+'× / '+c23.toFixed(2)+'× / wall '+CLIFF_OPTS.cliff.toFixed(2);
+    return;
+  }
   const dc=parseFloat(document.getElementById('f-decay').value)||0.82;
   document.getElementById('ratio-display').textContent=c12.toFixed(2)+'× / '+c23.toFixed(2)+'× / '+dc.toFixed(2);
 }
@@ -167,11 +167,13 @@ function go(){
   const { rows } = _E.calculatePayouts({
     entries, pool, PT, PT_PCT,
     minCash: mc, guaranteedFirst: gfirst, minFirstPct, ftSize,
-    snap: SNAP, maxSame: CURVE==='cliff' ? CLIFF_OPTS.maxSame : MAX_SAME,
+    snap: SNAP, maxSame: MAX_SAME,
     placesOverride: op,
     cap12, cap23, decay, tailDecay: TAIL_DECAY,
+    // Cliff mode: 1st/2nd & 2nd/3rd come from the editable ratio fields (cap12/cap23);
+    // ftDecay + wall stay theme-set.
     curve: CURVE, cliff: CLIFF_OPTS.cliff, ftDecay: CLIFF_OPTS.ftDecay,
-    cap1: CLIFF_OPTS.cap1, cap2: CLIFF_OPTS.cap2,
+    cap1: cap12, cap2: cap23,
   });
 
   ROWS=rows;
@@ -235,10 +237,15 @@ function render(){
     const nextP=SNAP?snapOf(i+1):displayRows[i+1].prize;
     return thisP-nextP;
   });
+  // Cliff mode: the final-table wall (jump into place ftSize+1) is intentionally a
+  // bigger drop than the FT steps around it — never flag it (or the row above it) as
+  // an inversion. Wall sits at displayRows index ftSize-1 (places 1..10 are singles).
+  const cliffWallIdx = CURVE==='cliff' ? (FT_SIZE||9)-1 : -1;
   // Check each jump: unlocked gaps should decrease going down, locked gaps should increase going up
   const jumpOk=jumps.map((j,i)=>{
     if(j===null) return null;
     if(j<-0.01) return false; // inversion — prize below is higher
+    if(cliffWallIdx>=0 && (i===cliffWallIdx || i===cliffWallIdx-1)) return true; // FT wall is intentional
     if(i>=jumps.length-1||jumps[i+1]===null) return true; // bottom-most gap, nothing to compare
     const nextJ=jumps[i+1];
     if(nextJ===null) return true;
@@ -546,10 +553,30 @@ function applyTheme(theme){
       cap2:    theme.cap2    ?? 1.55,
       maxSame: theme.maxSame ?? 10,
     };
+    // Seed the editable ratio + max-same fields with the cliff defaults.
+    const c12=$('f-cap12'), c23=$('f-cap23'), ms=$('f-maxsame');
+    if(c12){ c12.value=CLIFF_OPTS.cap1; delete c12.dataset.manual; }
+    if(c23){ c23.value=CLIFF_OPTS.cap2; delete c23.dataset.manual; }
+    if(ms){ ms.value=CLIFF_OPTS.maxSame; delete ms.dataset.manual; }
   }
+  applyModeVisibility();
   // Reflect the active mode's params in the setup panel (cliff ≠ standard defaults).
   updateRatioDisplay();
   updateMaxSameDisplay();
+}
+
+// Show/hide setup controls that don't apply to the active payout mode.
+// Cliff ignores Decay and Min-1st-place(%); the structure toggle reads "Cliff".
+function applyModeVisibility(){
+  const cliff=CURVE==='cliff';
+  const decayCol=$('decay-col'), minfirstCol=$('minfirst-col'), ptog=$('ptog-standard');
+  if(decayCol)    decayCol.style.display    = cliff ? 'none' : '';
+  if(minfirstCol) minfirstCol.style.display = cliff ? 'none' : '';
+  if(ptog)        ptog.textContent          = cliff ? 'Cliff' : 'Standard';
+  const sum=document.getElementById('ratio-summary');
+  if(sum) sum.dataset.tip = cliff
+    ? 'Sets the prize gap at the top. 1.87× means 1st wins 87% more than 2nd; 1.55× means 2nd wins 55% more than 3rd. Wall is the jump into the final table.'
+    : 'Sets the prize gap at the top. 1.45× means 1st wins 45% more than 2nd; 1.30× means 2nd wins 30% more than 3rd. Decay controls how fast prizes drop from 3rd down — higher = flatter mid-field.';
 }
 
 document.addEventListener('DOMContentLoaded',()=>{

@@ -317,9 +317,15 @@ async function runTests() {
     // No ✗ in the Jump column — the gap-inversion bug surfaced here
     const xMarks = (d.getElementById('tbl-inner').textContent.match(/✗/g) || []).length;
     log(xMarks === 0, 'Case 10 no ✗ (gap inversions) in Jump column', `${xMarks} ✗`);
+    // 1st/2nd not inflated — should track the theme cap1 (1.87), not the old ~1.98
+    log(wall && (prizes[0] / prizes[1]) < 1.95, 'Case 10 1st/2nd tracks cap1 (not inflated)', `${(prizes[0] / prizes[1]).toFixed(3)}`);
     // Setup panel reflects cliff params, not standard defaults
     log(d.getElementById('maxsame-display').textContent.trim() === '10', 'Case 10 identical-prizes shows 10 (cliff maxSame)', d.getElementById('maxsame-display').textContent);
     log(d.getElementById('s-mode').textContent.trim() === 'Cliff', 'Case 10 mode = Cliff', d.getElementById('s-mode').textContent);
+    // Controls cliff doesn't use are hidden; structure toggle relabelled
+    log(d.getElementById('decay-col').style.display === 'none', 'Case 10 Decay field hidden in cliff');
+    log(d.getElementById('minfirst-col').style.display === 'none', 'Case 10 Min-1st-% field hidden in cliff');
+    log(d.getElementById('ptog-standard').textContent.trim() === 'Cliff', 'Case 10 structure button reads "Cliff"', d.getElementById('ptog-standard').textContent);
     dom.window.close();
   }
 }

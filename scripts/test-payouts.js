@@ -1221,6 +1221,29 @@ function testCliffSnapped(name, cfg, snap) {
     { entries: 487, pool: 128160, minCash: 700, snap: 50, ftSize: 9, placesOverride: 57, guaranteedFirst: 30000, ...t }, 50);
 });
 
+// K9 — editable cap1/cap2 are honoured, and the snapped top ratio is NOT inflated.
+// (The old bug: raw 1st/2nd = cap1 but snapping pushed it from 1.87 → 1.98.)
+function testCliffCaps(name, cap1, cap2) {
+  const t = loadCliffTheme('example-cliff.json');
+  const cfg = { entries: 487, pool: 128160, minCash: 700, snap: 50, ftSize: 9, placesOverride: 0, ...t, cap1, cap2 };
+  const { rows } = E.calculatePayouts(cfg);
+  const rawR = rows[0].prize / rows[1].prize;
+  const sv = E.snapDisplay(rows, 50, 128160, { preserveShape: true, cliffGapIndex: 8 });
+  const snapR = sv[0] / sv[1], snap23 = sv[1] / sv[2];
+  const rawOk = Math.abs(rawR - cap1) < 0.01;          // raw honours the set cap exactly
+  const snapOk = Math.abs(snapR - cap1) < 0.05;        // snapped stays within a grid step
+  const c23Ok = Math.abs(snap23 - cap2) < 0.05;
+  const ok = rawOk && snapOk && c23Ok;
+  console.log(`\n${ok ? '✓' : '✗'} ${name}`);
+  console.log(`  ${rawOk ? '✓' : '✗'} raw 1st/2nd = ${rawR.toFixed(3)} (set ${cap1})`);
+  console.log(`  ${snapOk ? '✓' : '✗'} snapped 1st/2nd = ${snapR.toFixed(3)} (≈ ${cap1}, not inflated)`);
+  console.log(`  ${c23Ok ? '✓' : '✗'} snapped 2nd/3rd = ${snap23.toFixed(3)} (≈ ${cap2})`);
+  if (ok) passed++; else failed++;
+}
+testCliffCaps('K9a — cliff honours cap1 1.87 / cap2 1.55 (snapped, not inflated)', 1.87, 1.55);
+testCliffCaps('K9b — cliff honours edited cap1 1.45 / cap2 1.30', 1.45, 1.30);
+testCliffCaps('K9c — cliff honours edited cap1 2.00 / cap2 1.60', 2.00, 1.60);
+
 function report(slug, errors) {
   if (errors.length === 0) {
     console.log(`✓ ${slug}`);

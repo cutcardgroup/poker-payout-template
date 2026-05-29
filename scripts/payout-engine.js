@@ -261,21 +261,56 @@
 
     const fl = rows.findIndex(r => r.locked);
     if (preserve) {
-      // Round band-to-band GAPS to the grid and force them non-increasing (convex),
-      // then rebuild values bottom-up. Rounding values directly lets $-snapping
-      // reorder near-equal gaps into inversions; rounding gaps avoids that. The
-      // intentional cliff wall (gap index cliffGapIndex) is exempt from the clamp.
+      // Cliff mode. Snap in two parts so the curve stays convex AND the top ratios
+      // (1st/2nd, 2nd/3rd set by cap1/cap2) survive rounding — splitting at the
+      // cliff wall (gap index cliffGapIndex = ftSize-1):
+      //   • Tail (ftSize..end): error-diffusion gap rounding (carry residual forward
+      //     so the running sum tracks the raw curve), floor-anchored, gaps forced
+      //     non-increasing. Convex, floor-faithful.
+      //   • FT singles (0..ftSize-1): funded from the EXACT remainder by each row's
+      //     raw proportion (which already encodes the caps); 1st is the balancer of
+      //     the FT block only, so rounding slack can't inflate the top ratio.
       const n = s.length;
+      const POOL = pool !== undefined ? pool : rows.reduce((a, r) => a + r.prize * r.count, 0);
       const cliffGap = (opts && opts.cliffGapIndex != null) ? opts.cliffGapIndex : -1;
-      const gap = [];
-      for (let i = 0; i < n - 1; i++) gap.push(Math.round((rows[i].prize - rows[i + 1].prize) / to) * to);
-      for (let i = 1; i < gap.length; i++) {
-        if (i === cliffGap || i - 1 === cliffGap) continue;
-        if (gap[i] > gap[i - 1]) gap[i] = gap[i - 1];
+      const ftCount = cliffGap >= 0 ? cliffGap + 1 : 0; // FT singles (places 1..ftSize)
+
+      if (ftCount <= 0 || n <= ftCount + 1) {
+        // No usable cliff split (tiny field): round values + clamp inversions.
+        for (let i = 1; i < n; i++) { if (rows[i].pinSnap) continue; if (s[i] > s[i - 1]) s[i] = s[i - 1]; }
+        return s;
       }
+
+      const tailStart = ftCount; // index of the cliff band (place ftSize+1)
+      // Tail gaps via error diffusion (carry residual forward so the shape tracks the
+      // raw curve), then forced non-increasing on the gap array (guarantees convex at
+      // any grid). Rebuilt bottom-up from the snapped floor.
+      const tg = []; let carry = 0;
+      for (let i = tailStart; i < n - 1; i++) {
+        const target = (rows[i].prize - rows[i + 1].prize) + carry;
+        const r = Math.round(target / to) * to;
+        carry = target - r;
+        tg.push(Math.max(0, r));
+      }
+      for (let i = 1; i < tg.length; i++) if (tg[i] > tg[i - 1]) tg[i] = tg[i - 1];
       s[n - 1] = rows[n - 1].pinSnap ? rows[n - 1].prize : Math.round(rows[n - 1].prize / to) * to;
-      for (let i = n - 2; i >= 0; i--) s[i] = s[i + 1] + gap[i];
-      for (let i = 0; i < n; i++) if (rows[i].pinSnap) s[i] = rows[i].prize;
+      for (let i = n - 2; i >= tailStart; i--) s[i] = s[i + 1] + tg[i - tailStart];
+
+      let tailTot = 0; for (let i = tailStart; i < n; i++) tailTot += s[i] * rows[i].count;
+      const topMoney = POOL - tailTot;
+      let sumRaw = 0; for (let i = 0; i < ftCount; i++) sumRaw += rows[i].prize;
+      const balIdx = rows[0].pinSnap ? 1 : 0; // guaranteedFirst pins 1st → balance on 2nd
+      let used = 0;
+      for (let i = 0; i < ftCount; i++) {
+        if (i === balIdx) continue;
+        s[i] = rows[i].pinSnap ? rows[i].prize
+          : (sumRaw > 0 ? Math.round(topMoney * rows[i].prize / sumRaw / to) * to : 0);
+        used += s[i] * rows[i].count;
+      }
+      s[balIdx] = (topMoney - used) / rows[balIdx].count;
+      for (let i = 1; i < ftCount; i++) { if (rows[i].pinSnap) continue; if (s[i] > s[i - 1]) s[i] = s[i - 1]; }
+      if (s[ftCount - 1] < s[ftCount]) s[ftCount - 1] = s[ftCount]; // keep 9th ≥ 10th (wall)
+      return s;
     } else {
       if (fl > 0) {
         const lockedGaps = [];
